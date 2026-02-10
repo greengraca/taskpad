@@ -20,12 +20,12 @@ import {
 } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT",
-  storageBucket:     "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID",
+  apiKey: "AIzaSyD6g1Laotwvv01dDcLb4iNZE-ySq6BCVPo",
+  authDomain: "taskpad-76210.firebaseapp.com",
+  projectId: "taskpad-76210",
+  storageBucket: "taskpad-76210.firebasestorage.app",
+  messagingSenderId: "165523587560",
+  appId: "1:165523587560:web:04cae1d27380f97792645d"
 };
 
 // Check if Firebase is configured
