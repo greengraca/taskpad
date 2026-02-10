@@ -32,7 +32,6 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 /* ─── Header ─── */
 .tp-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 10px; border-bottom: 1px solid var(--b); flex-shrink: 0; }
 .tp-hdr-l { display: flex; align-items: center; gap: 10px; }
-.tp-logo { font-size: 16px; color: #38bdf8; line-height: 1; }
 .tp-name { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; color: #e8e8e8; }
 .sync-dot { font-size: 12px; color: #4ecdc4; animation: spin 2s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -57,7 +56,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-t-edit { color: #e8e8e8; background: #141414; outline: none; border-radius: 0; }
 .tp-t-add { background: none; border: 1px dashed #2a2a2a; color: #555; font-size: 16px; cursor: pointer; padding: 3px 10px; border-radius: 6px; margin-left: 8px; font-family: var(--fm); line-height: 1; }
 .tp-t-add:hover { border-color: #444; color: #888; }
-.team-badge { font-size: 10px; }
+.team-badge { font-size: 10px; filter: grayscale(1) brightness(2); }
 
 /* ─── Context menu ─── */
 .tp-ctx { position: fixed; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 240px; box-shadow: 0 8px 30px rgba(0,0,0,.5); max-height: 80vh; overflow-y: auto; }
@@ -125,9 +124,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .task-tag { font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
 .task-author { font-size: 9px; font-family: var(--fm); font-weight: 500; color: #555; background: #1a1a1a; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
 
-/* Hide from inbox button */
-.hide-btn { background: none; border: none; color: transparent; font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1; border-radius: 4px; transition: color .15s; flex-shrink: 0; }
+/* Hide from inbox button (eye-slash SVG) */
+.hide-btn { background: none; border: none; color: transparent; cursor: pointer; padding: 0 2px; line-height: 1; border-radius: 4px; transition: color .15s; flex-shrink: 0; display: flex; align-items: center; }
 .hide-btn:hover { color: #888 !important; }
+.hide-btn svg { display: block; }
 
 .del-btn { background: none; border: none; color: transparent; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 4px; transition: color .15s; flex-shrink: 0; }
 .del-btn:hover { color: #ff4444 !important; }
@@ -144,7 +144,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: none; }
 .sc-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px solid var(--bl); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color .15s, background .15s; }
 .sc-icon:hover { background: #1a1a1a; border-color: #333; }
-.sc-icon img { border-radius: 2px; pointer-events: none; }
+/* White pill behind favicons fixes transparent-bg icons (GitHub, Gmail etc.) */
+.sc-icon img { border-radius: 3px; pointer-events: none; background: #fff; padding: 1px; }
 .sc-fb { font-size: 14px; font-weight: 700; font-family: var(--fm); }
 
 .sc-add { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px dashed #2a2a2a; color: #555; font-family: var(--fm); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }

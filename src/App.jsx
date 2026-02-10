@@ -225,7 +225,6 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
-  // Author badge for team tasks
   const authorNick = isTeam && nicknames && (task.createdByUid || task.createdByEmail)
     ? (nicknames[task.createdByUid] || task.createdByEmail?.split('@')[0] || null)
     : null;
@@ -263,7 +262,15 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
         {authorNick && <span className="task-author">{authorNick}</span>}
       </div>
-      {canHide && <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">👁‍🗨</button>}
+      {canHide && (
+        <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        </button>
+      )}
       <button onClick={() => onDelete(task.id)} className="del-btn">×</button>
     </div>
   );
@@ -298,6 +305,7 @@ export default function App() {
   const [scUnlocked, setScUnlocked] = useState(false);
   const editTabRef = useRef(null);
   const saveRef = useRef(null);
+  const undoStackRef = useRef([]);
 
   // Shortcuts modal
   const [scOpen, setScOpen] = useState(false);
@@ -327,9 +335,10 @@ export default function App() {
   const teamId = activeProj?.teamId;
   const teamProjData = isTeamTab ? teamProjects.find(tp => tp.teamId === teamId) : null;
 
-  // Inbox: show tasks that originated from inbox (including auto-detected) unless hidden
-  // Project: show tasks assigned to that project (both inbox-origin and project-origin)
+  // Inbox: show tasks that originated from inbox (including auto-detected ones) unless hidden
+  // A task written in inbox that matches a project lives in BOTH places — same object, synced done state
   const inboxVisible = tasks.filter(t => {
+    // Explicit origin field takes priority; fallback for legacy tasks
     const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
     return origin === 'inbox' && !t.hiddenFromInbox;
   });
@@ -340,6 +349,7 @@ export default function App() {
   } else if (isTeamTab) {
     visible = teamTasksMap[teamId] || EMPTY;
   } else {
+    // Project tab: show tasks whose projectId matches (regardless of origin)
     visible = tasks.filter(t => t.projectId === activeTab);
   }
 
@@ -362,10 +372,8 @@ export default function App() {
     up(prev => {
       if (!prev) return prev;
       if (prev.activeTab === INBOX_ID) {
-        // Rebuild: replace inbox-visible tasks in-place
         const inboxIds = new Set(newVis.map(t => t.id));
         const otherTasks = prev.tasks.filter(t => !inboxIds.has(t.id));
-        // Find insertion point (first inbox-origin task position)
         const firstInboxIdx = prev.tasks.findIndex(t => {
           const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
           return origin === 'inbox' && !t.hiddenFromInbox;
@@ -390,7 +398,6 @@ export default function App() {
 
   const reorderSc = useCallback((newSc) => up(p => p ? { ...p, scOrder: newSc.map(s => s.id) } : p), [up]);
 
-  // Use team reorder for team tabs, local reorder otherwise
   const effectiveReorder = isTeamTab ? reorderTeamVisible : reorderVisible;
   const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(visible, effectiveReorder);
   const { itemRefs: scRefs, onPointerDown: onScDrag, getStyle: getScStyle } = useHDragReorder(orderedSc, reorderSc);
@@ -399,6 +406,10 @@ export default function App() {
   useEffect(() => {
     const normalizeLoaded = (loaded) => {
       const base = loaded && Array.isArray(loaded.tasks) ? { ...DEFAULT_DATA, ...loaded } : { ...DEFAULT_DATA };
+      // Backfill origin for legacy tasks that don't have it
+      if (Array.isArray(base.tasks)) {
+        base.tasks = base.tasks.map(t => t.origin ? t : { ...t, origin: t.projectId === INBOX_ID ? 'inbox' : 'project' });
+      }
       const savedShortcuts = Array.isArray(base.shortcuts) && base.shortcuts.length ? base.shortcuts : DEFAULT_SHORTCUTS;
       const byId = new Map(savedShortcuts.map(s => [s.id, s]));
       const merged = [...savedShortcuts];
@@ -420,7 +431,7 @@ export default function App() {
     return cleanup;
   }, []);
 
-  // ─── Subscribe to team tasks when viewing a team tab ───
+  // ─── Subscribe to team tasks ───
   useEffect(() => {
     if (!isTeamTab || !teamId) return;
     const unsub = subscribeTeamTasks(teamId, (tasks) => {
@@ -435,6 +446,27 @@ export default function App() {
       if (info?.isUpdateAvailable) setUpdateInfo(info);
     }).catch(() => {});
   }, []);
+
+  // ─── Ctrl+Z undo ───
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.target.closest('input, textarea')) {
+        e.preventDefault();
+        const entry = undoStackRef.current.pop();
+        if (!entry) return;
+        up(p => {
+          const all = [...p.tasks];
+          // Insert back at original position or end
+          const idx = Math.min(entry._undoIdx ?? all.length, all.length);
+          const restored = { ...entry }; delete restored._undoIdx;
+          all.splice(idx, 0, restored);
+          return { ...p, tasks: all };
+        });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [up]);
 
   // ─── Auth ───
   const runAuth = async () => {
@@ -463,10 +495,17 @@ export default function App() {
 
   const insertTask = (afterIdx) => {
     if (isTeamTab && teamId) {
-      // Team task creation
+      // Create a temporary local task for inline editing, commit to Firestore on save
       const vis = teamTasksMap[teamId] || [];
-      const afterOrder = afterIdx >= 0 && vis[afterIdx] ? vis[afterIdx].order : -1;
-      createTeamTask({ teamId, text: '', afterOrder }).catch(e => console.warn('Team task create failed:', e));
+      const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
+      const tempId = `_tmp_${genId()}`;
+      const tempTask = { id: tempId, text: '', done: false, _new: true, _temp: true, _teamId: teamId, _afterOrder: afterOrder, order: afterOrder + 0.5, createdByUid: authUser?.uid, createdByEmail: authUser?.email };
+      setTeamTasksMap(prev => {
+        const list = [...(prev[teamId] || [])];
+        if (afterIdx < 0) list.unshift(tempTask);
+        else list.splice(afterIdx + 1, 0, tempTask);
+        return { ...prev, [teamId]: list };
+      });
       return;
     }
 
@@ -475,7 +514,7 @@ export default function App() {
     up(prev => {
       const all = [...prev.tasks];
       const vis = isInbox
-        ? all.filter(t => { const o = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project'); return o === 'inbox' && !t.hiddenFromInbox; })
+        ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
         : all.filter(t => t.projectId === prev.activeTab);
       if (afterIdx < 0) { const first = vis[0]; all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt); }
       else { const ref = vis[afterIdx]; all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt); }
@@ -485,21 +524,33 @@ export default function App() {
 
   const changeTask = (id, text) => {
     if (isTeamTab && teamId) {
-      updateTeamTask({ teamId, taskId: id, patch: { text } }).catch(e => console.warn('Team task update failed:', e));
+      // Check if it's a temp task that needs to be committed to Firestore
+      const task = (teamTasksMap[teamId] || []).find(t => t.id === id);
+      if (task?._temp) {
+        // Remove temp, create real Firestore task
+        setTeamTasksMap(prev => ({ ...prev, [teamId]: (prev[teamId] || []).filter(t => t.id !== id) }));
+        if (text.trim()) {
+          createTeamTask({ teamId, text: text.trim(), afterOrder: task._afterOrder }).catch(e => console.warn('Team task create failed:', e));
+        }
+      } else {
+        updateTeamTask({ teamId, taskId: id, patch: { text } }).catch(e => console.warn('Team task update failed:', e));
+      }
       return;
     }
     up(prev => {
-      let pid = prev.tasks.find(t => t.id === id)?.projectId;
-      const origin = prev.tasks.find(t => t.id === id)?.origin || 'inbox';
-      if (pid === INBOX_ID || origin === 'inbox') { const d = detectProject(text); if (d) pid = d; }
-      return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, _new: false } : t) };
+      const existing = prev.tasks.find(t => t.id === id);
+      let pid = existing?.projectId;
+      // Always preserve the origin — inbox-origin tasks stay inbox-origin even when matched to a project
+      const origin = existing?.origin || 'inbox';
+      if (origin === 'inbox') { const d = detectProject(text); if (d) pid = d; }
+      return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, origin, _new: false } : t) };
     });
   };
 
   const toggleTask = (id) => {
     if (isTeamTab && teamId) {
       const t = (teamTasksMap[teamId] || []).find(x => x.id === id);
-      if (t) updateTeamTask({ teamId, taskId: id, patch: { done: !t.done } }).catch(e => console.warn(e));
+      if (t && !t._temp) updateTeamTask({ teamId, taskId: id, patch: { done: !t.done } }).catch(e => console.warn(e));
       return;
     }
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) }));
@@ -507,10 +558,25 @@ export default function App() {
 
   const deleteTask = (id) => {
     if (isTeamTab && teamId) {
-      deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
+      const task = (teamTasksMap[teamId] || []).find(t => t.id === id);
+      if (task?._temp) {
+        setTeamTasksMap(prev => ({ ...prev, [teamId]: (prev[teamId] || []).filter(t => t.id !== id) }));
+      } else {
+        deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
+      }
       return;
     }
-    up(p => ({ ...p, tasks: p.tasks.filter(t => t.id !== id) }));
+    // Save to undo stack before deleting
+    up(p => {
+      const idx = p.tasks.findIndex(t => t.id === id);
+      const task = p.tasks[idx];
+      if (task) {
+        undoStackRef.current.push({ ...task, _undoIdx: idx });
+        // Keep max 30 undo entries
+        if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+      }
+      return { ...p, tasks: p.tasks.filter(t => t.id !== id) };
+    });
   };
 
   const hideFromInbox = (id) => {
@@ -530,11 +596,9 @@ export default function App() {
   // ─── Project operations ───
   const addProject = () => { const c = TAB_COLORS[projects.length % TAB_COLORS.length]; const np = { id: genId(), name: 'New Project', color: c, keywords: [] }; up(p => ({ ...p, projects: [...p.projects, np], activeTab: np.id })); setEditingTab(np.id); setEditTabName('New Project'); };
   const deleteProject = (id) => {
-    const pr = projects.find(p => p.id === id);
     up(p => ({
       ...p,
       projects: p.projects.filter(x => x.id !== id),
-      // Tasks that originated from inbox go back to inbox-only; project-origin tasks get deleted
       tasks: p.tasks.map(t => {
         if (t.projectId !== id) return t;
         if (t.origin === 'inbox') return { ...t, projectId: INBOX_ID, hiddenFromInbox: false };
@@ -556,16 +620,12 @@ export default function App() {
     try {
       const pr = projects.find(p => p.id === projId);
       const tid = await createTeamProject({ name: pr.name, color: pr.color });
-      // Migrate local tasks to team
       const projTasks = tasks.filter(t => t.projectId === projId);
-      for (const t of projTasks) {
-        await createTeamTask({ teamId: tid, text: t.text });
-      }
-      // Update local project to team mode
+      for (const t of projTasks) { await createTeamTask({ teamId: tid, text: t.text }); }
       up(p => ({
         ...p,
         projects: p.projects.map(x => x.id === projId ? { ...x, isTeam: true, teamId: tid } : x),
-        tasks: p.tasks.filter(t => t.projectId !== projId), // remove migrated tasks
+        tasks: p.tasks.filter(t => t.projectId !== projId),
       }));
     } catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
   };
@@ -573,25 +633,18 @@ export default function App() {
   const sendInvite = async (tid) => {
     if (!inviteEmail.trim()) return;
     setTeamBusy(true); setTeamErr('');
-    try {
-      await sendTeamInvite({ teamId: tid, toEmail: inviteEmail.trim() });
-      setInviteEmail('');
-    } catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
+    try { await sendTeamInvite({ teamId: tid, toEmail: inviteEmail.trim() }); setInviteEmail(''); }
+    catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
   };
 
   const handleAcceptInvite = async (inviteId) => {
     setTeamBusy(true);
     try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); }
   };
-
-  const handleDeclineInvite = async (inviteId) => {
-    try { await declineTeamInvite({ inviteId }); } catch (e) { console.warn(e); }
-  };
+  const handleDeclineInvite = async (inviteId) => { try { await declineTeamInvite({ inviteId }); } catch (e) { console.warn(e); } };
 
   const saveNickname = async (tid, uid, nick) => {
-    try {
-      await updateTeamProject({ teamId: tid, patch: { [`nicknames.${uid}`]: nick.trim() || uid } });
-    } catch (e) { console.warn(e); }
+    try { await updateTeamProject({ teamId: tid, patch: { [`nicknames.${uid}`]: nick.trim() || uid } }); } catch (e) { console.warn(e); }
     setNickEditUid(null);
   };
 
@@ -630,7 +683,7 @@ export default function App() {
 
       <header className="tp-hdr">
         <div className="tp-hdr-l">
-          <span className="tp-logo">▮</span><h1 className="tp-name">TaskPad</h1>
+          <h1 className="tp-name">TaskPad</h1>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -640,7 +693,6 @@ export default function App() {
           ) : (
             <span className="local-badge">local</span>
           )}
-          {/* Invite bell */}
           {invites.length > 0 && (
             <button className="invite-bell" onClick={() => setInvitesOpen(true)} title={`${invites.length} pending invite(s)`}>
               🔔 <span className="invite-count">{invites.length}</span>
@@ -727,8 +779,8 @@ export default function App() {
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pid: pr.id }); setTeamErr(''); }}
                 style={{ borderBottomColor: activeTab === pr.id ? pr.color : 'transparent', background: activeTab === pr.id ? pr.color + '0a' : 'transparent' }}>
                 <span className="tp-td" style={{ background: pr.color }} />
-                {pr.isTeam && <span className="team-badge">👥</span>}
                 {pr.name}
+                {pr.isTeam && <span className="team-badge">👥</span>}
                 {activeTab === pr.id && (() => {
                   const count = pr.isTeam
                     ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
@@ -759,7 +811,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Team section */}
             {!pr.isTeam && isFirebaseConfigured() && (
               <div className="ctx-team-section">
                 <button className="ctx-it" disabled={teamBusy} onClick={() => enableTeam(pr.id)}>
@@ -772,8 +823,6 @@ export default function App() {
             {pr.isTeam && tp && (
               <div className="ctx-team-section">
                 <span className="ctx-kw-lbl">👥 Team Project</span>
-
-                {/* Members + nicknames */}
                 <div className="team-members">
                   {(tp.memberEmails || []).map((email, i) => {
                     const uid = (tp.memberUids || [])[i];
@@ -794,8 +843,6 @@ export default function App() {
                     );
                   })}
                 </div>
-
-                {/* Invite */}
                 <div className="team-invite">
                   <input className="kw-in" placeholder="Invite by email + Enter" value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
@@ -848,7 +895,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Shortcuts modal — entire row clickable */}
       {scOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => setScOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
