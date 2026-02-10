@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { initSync, saveToCloud, cleanup } from './sync';
+import { initSync, saveToCloud, cleanup, getAuthUser,
+  createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
+  subscribeTeamTasks, createTeamTask, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
+} from './sync';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
+import { checkForUpdates } from './updater';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64', color: '#fff' },
   { id: 'gh', name: 'GitHub', url: 'https://github.com', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64', color: '#e6edf3' },
   { id: 'nf', name: 'Netlify', url: 'https://app.netlify.com', icon: 'https://www.google.com/s2/favicons?domain=netlify.com&sz=64', color: '#32e6e2' },
-
-  // Local icons (more reliable in Tauri)
   { id: 'gm', name: 'Gmail', url: 'https://mail.google.com', icon: '/shortcuts/gmail.svg', color: '#ea4335' },
   { id: 'jg', name: 'Portfolio', url: 'https://www.joaograca.work/', icon: '/shortcuts/portfolio.png', color: '#7eb8da' },
   { id: 'fb', name: 'Firebase', url: 'https://console.firebase.google.com/', icon: '/shortcuts/firebase.svg', color: '#fbbf24' },
-
   { id: 'ae', name: 'AliExpress', url: 'https://www.aliexpress.com', icon: 'https://www.google.com/s2/favicons?domain=aliexpress.com&sz=64', color: '#e43225' },
   { id: 'et', name: 'Etsy', url: 'https://www.etsy.com/your/shops/me/dashboard', icon: 'https://www.google.com/s2/favicons?domain=etsy.com&sz=64', color: '#f1641e' },
   { id: 'db', name: 'MongoDB', url: 'https://cloud.mongodb.com/', icon: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64', color: '#00ed64' },
@@ -24,7 +25,6 @@ const DEFAULT_SHORTCUTS = [
   { id: 'yt', name: 'YouTube', url: 'https://www.youtube.com', icon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64', color: '#ff0000' },
 ];
 
-// +4 colors (12 total)
 const TAB_COLORS = ['#38bdf8', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#ffe66d', '#4ecdc4', '#ff6b6b', '#22c55e', '#60a5fa', '#f59e0b', '#14b8a6'];
 const INBOX_ID = '__inbox__';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -33,11 +33,10 @@ const EMPTY = [];
 const DEFAULT_DATA = {
   projects: [{ id: 'p1', name: 'Sample', color: '#4ecdc4', keywords: ['sample'] }],
   tasks: [
-    { id: 'w1', text: 'Drag me by the grip on the left ⠿', done: false, projectId: INBOX_ID, ts: Date.now() },
-    { id: 'w2', text: 'Click between tasks to insert new ones', done: false, projectId: INBOX_ID, ts: Date.now() },
-    { id: 'w3', text: 'Hold a shortcut icon ~0.6s to unlock drag mode', done: false, projectId: INBOX_ID, ts: Date.now() },
+    { id: 'w1', text: 'Drag me by the grip on the left ⠿', done: false, projectId: INBOX_ID, origin: 'inbox', ts: Date.now() },
+    { id: 'w2', text: 'Click between tasks to insert new ones', done: false, projectId: INBOX_ID, origin: 'inbox', ts: Date.now() },
+    { id: 'w3', text: 'Hold a shortcut icon ~0.6s to unlock drag mode', done: false, projectId: INBOX_ID, origin: 'inbox', ts: Date.now() },
   ],
-  // per-account shortcuts
   shortcuts: DEFAULT_SHORTCUTS,
   scOrder: DEFAULT_SHORTCUTS.map(s => s.id),
   showSc: true,
@@ -108,8 +107,7 @@ function useHDragReorder(items, onReorder) {
     widthsRef.current = items.map(item => { const el = itemRefs.current[item.id]; return el ? el.getBoundingClientRect().width + 8 : 44; });
     const x = forcedX ?? e?.clientX ?? e?.touches?.[0]?.clientX ?? 0;
     setDragState({ id, startX: x, currentX: x, startIdx: idx }); setOrder(items.map((_, i) => i));
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
+    e?.preventDefault?.(); e?.stopPropagation?.();
   }, [items]);
 
   useEffect(() => {
@@ -145,7 +143,7 @@ function useHDragReorder(items, onReorder) {
   return { itemRefs, onPointerDown, getStyle, isDragging: !!dragState };
 }
 
-// ─── Shortcut Icon (ring after 120ms hold, no hint text) ───
+// ─── Shortcut Icon (ring after 120ms hold) ───
 function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb }) {
   const [holdProgress, setHoldProgress] = useState(0);
   const [showRing, setShowRing] = useState(false);
@@ -161,8 +159,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
   };
 
   const startHold = (e) => {
-    isDownRef.current = true;
-    trackPos(e);
+    isDownRef.current = true; trackPos(e);
     if (unlocked) { onDragStart(e, lastPosRef.current.x); return; }
     const start = Date.now();
     thresholdRef.current = setTimeout(() => {
@@ -171,18 +168,9 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
         const pct = Math.min((Date.now() - start) / 600, 1);
         setHoldProgress(pct);
         if (pct >= 1) {
-          // Unlock drag mode, and immediately start the drag without requiring a second press.
-          onUnlock();
-          setShowRing(false);
-          setHoldProgress(0);
+          onUnlock(); setShowRing(false); setHoldProgress(0);
           if (isDownRef.current) {
-            const fakeEvt = {
-              button: 0,
-              clientX: lastPosRef.current.x,
-              touches: [{ clientX: lastPosRef.current.x }],
-              preventDefault() {},
-              stopPropagation() {},
-            };
+            const fakeEvt = { button: 0, clientX: lastPosRef.current.x, touches: [{ clientX: lastPosRef.current.x }], preventDefault() {}, stopPropagation() {} };
             onDragStart(fakeEvt, lastPosRef.current.x);
           }
           return;
@@ -223,7 +211,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, onToggle, onDelete, onChange, dragHandle, style, refCb }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
@@ -232,33 +220,30 @@ function TaskLine({ task, allProjects, accentColor, isInbox, onToggle, onDelete,
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Auto-grow textarea as you add bullet lines
-    el.style.height = '0px';
-    el.style.height = `${el.scrollHeight}px`;
+    el.style.height = '0px'; el.style.height = `${el.scrollHeight}px`;
   }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
+  // Author badge for team tasks
+  const authorNick = isTeam && nicknames && (task.createdByUid || task.createdByEmail)
+    ? (nicknames[task.createdByUid] || task.createdByEmail?.split('@')[0] || null)
+    : null;
+
   const insertBullet = (e) => {
-    // Shift+Enter -> add a bullet line
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
-      const el = e.target;
-      const start = el.selectionStart ?? text.length;
-      const end = el.selectionEnd ?? text.length;
-      const bullet = `\n- `;
-      const next = text.slice(0, start) + bullet + text.slice(end);
+      const el = e.target; const start = el.selectionStart ?? text.length; const end = el.selectionEnd ?? text.length;
+      const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
       setText(next);
-      requestAnimationFrame(() => {
-        try {
-          const pos = start + bullet.length;
-          el.selectionStart = el.selectionEnd = pos;
-        } catch {}
-      });
+      requestAnimationFrame(() => { try { const pos = start + bullet.length; el.selectionStart = el.selectionEnd = pos; } catch {} });
       return true;
     }
     return false;
   };
+
+  // Can hide from inbox: task originated from inbox but is tagged to a project
+  const canHide = isInbox && task.projectId !== INBOX_ID && onHide;
 
   return (
     <div className={`task-row ${task.done ? 'task-done' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
@@ -270,24 +255,15 @@ function TaskLine({ task, allProjects, accentColor, isInbox, onToggle, onDelete,
       </button>
       <div className="task-body" onClick={() => !editing && setEditing(true)}>
         {editing ? (
-          <textarea
-            ref={inputRef}
-            className="task-input"
-            rows={1}
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onBlur={commit}
-            onKeyDown={e => {
-              if (insertBullet(e)) return;
-              if (e.key === 'Enter') e.target.blur();
-              if (e.key === 'Escape') { setEditing(false); setText(task.text); }
-            }}
-          />
+          <textarea ref={inputRef} className="task-input" rows={1} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
+            onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
         {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
+        {authorNick && <span className="task-author">{authorNick}</span>}
       </div>
+      {canHide && <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">👁‍🗨</button>}
       <button onClick={() => onDelete(task.id)} className="del-btn">×</button>
     </div>
   );
@@ -309,6 +285,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [synced, setSynced] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signin');
   const [authEmail, setAuthEmail] = useState('');
@@ -322,24 +299,55 @@ export default function App() {
   const editTabRef = useRef(null);
   const saveRef = useRef(null);
 
+  // Shortcuts modal
+  const [scOpen, setScOpen] = useState(false);
+  const [scDraft, setScDraft] = useState({ id: null, name: '', url: '', icon: '', color: '#888' });
+  const [scErr, setScErr] = useState('');
+
+  // Update popup
+  const [updateInfo, setUpdateInfo] = useState(null);
+
+  // Team state
+  const [invites, setInvites] = useState([]);
+  const [teamProjects, setTeamProjects] = useState([]);
+  const [teamTasksMap, setTeamTasksMap] = useState({});
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [teamErr, setTeamErr] = useState('');
+  const [invitesOpen, setInvitesOpen] = useState(false);
+  const [nickEditUid, setNickEditUid] = useState(null);
+  const [nickEditVal, setNickEditVal] = useState('');
+
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
   const activeTab = data?.activeTab || INBOX_ID;
   const isInbox = activeTab === INBOX_ID;
-  const inboxTasks = tasks.filter(t => t.projectId === INBOX_ID);
-  // Inbox should ONLY show inbox tasks
-  const visible = isInbox ? inboxTasks : tasks.filter(t => t.projectId === activeTab);
   const activeProj = projects.find(p => p.id === activeTab);
+  const isTeamTab = !!(activeProj?.isTeam && activeProj?.teamId);
+  const teamId = activeProj?.teamId;
+  const teamProjData = isTeamTab ? teamProjects.find(tp => tp.teamId === teamId) : null;
+
+  // Inbox: show tasks that originated from inbox (including auto-detected) unless hidden
+  // Project: show tasks assigned to that project (both inbox-origin and project-origin)
+  const inboxVisible = tasks.filter(t => {
+    const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
+    return origin === 'inbox' && !t.hiddenFromInbox;
+  });
+
+  let visible;
+  if (isInbox) {
+    visible = inboxVisible;
+  } else if (isTeamTab) {
+    visible = teamTasksMap[teamId] || EMPTY;
+  } else {
+    visible = tasks.filter(t => t.projectId === activeTab);
+  }
+
   const accent = isInbox ? '#38bdf8' : (activeProj?.color || '#38bdf8');
 
   const shortcuts = data?.shortcuts?.length ? data.shortcuts : DEFAULT_SHORTCUTS;
   const scIds = (data?.scOrder?.length ? data.scOrder : shortcuts.map(s => s.id));
   const orderedSc = scIds.map(id => shortcuts.find(s => s.id === id)).filter(Boolean);
-
-  // Shortcuts modal
-  const [scOpen, setScOpen] = useState(false);
-  const [scDraft, setScDraft] = useState({ id: null, name: '', url: '', icon: '', color: '#888' });
-  const [scErr, setScErr] = useState('');
 
   const up = useCallback((fn) => {
     setData(prev => {
@@ -354,11 +362,17 @@ export default function App() {
     up(prev => {
       if (!prev) return prev;
       if (prev.activeTab === INBOX_ID) {
-        // Replace only the inbox tasks in-place, leaving project tasks untouched.
-        const inboxIdxs = prev.tasks.map((t, i) => (t.projectId === INBOX_ID ? i : -1)).filter(i => i >= 0);
-        const tasksCopy = [...prev.tasks];
-        inboxIdxs.forEach((idx, j) => { tasksCopy[idx] = newVis[j]; });
-        return { ...prev, tasks: tasksCopy };
+        // Rebuild: replace inbox-visible tasks in-place
+        const inboxIds = new Set(newVis.map(t => t.id));
+        const otherTasks = prev.tasks.filter(t => !inboxIds.has(t.id));
+        // Find insertion point (first inbox-origin task position)
+        const firstInboxIdx = prev.tasks.findIndex(t => {
+          const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
+          return origin === 'inbox' && !t.hiddenFromInbox;
+        });
+        const result = [...otherTasks];
+        result.splice(Math.max(0, firstInboxIdx), 0, ...newVis);
+        return { ...prev, tasks: result };
       }
       const at = prev.activeTab;
       const others = prev.tasks.filter(t => t.projectId !== at);
@@ -368,77 +382,74 @@ export default function App() {
     });
   }, [up]);
 
+  const reorderTeamVisible = useCallback((newVis) => {
+    if (!teamId) return;
+    setTeamTasksMap(prev => ({ ...prev, [teamId]: newVis }));
+    reorderTeamTasks({ teamId, orderedTasks: newVis }).catch(e => console.warn('Reorder failed:', e));
+  }, [teamId]);
+
   const reorderSc = useCallback((newSc) => up(p => p ? { ...p, scOrder: newSc.map(s => s.id) } : p), [up]);
 
-  const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(visible, reorderVisible);
+  // Use team reorder for team tabs, local reorder otherwise
+  const effectiveReorder = isTeamTab ? reorderTeamVisible : reorderVisible;
+  const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(visible, effectiveReorder);
   const { itemRefs: scRefs, onPointerDown: onScDrag, getStyle: getScStyle } = useHDragReorder(orderedSc, reorderSc);
 
+  // ─── Init sync ───
   useEffect(() => {
     const normalizeLoaded = (loaded) => {
       const base = loaded && Array.isArray(loaded.tasks) ? { ...DEFAULT_DATA, ...loaded } : { ...DEFAULT_DATA };
-
-      // Shortcuts: keep per-account custom shortcuts, but auto-add any new defaults.
       const savedShortcuts = Array.isArray(base.shortcuts) && base.shortcuts.length ? base.shortcuts : DEFAULT_SHORTCUTS;
       const byId = new Map(savedShortcuts.map(s => [s.id, s]));
       const merged = [...savedShortcuts];
-      for (const d of DEFAULT_SHORTCUTS) {
-        if (!byId.has(d.id)) {
-          merged.push(d);
-          byId.set(d.id, d);
-        }
-      }
+      for (const d of DEFAULT_SHORTCUTS) { if (!byId.has(d.id)) { merged.push(d); byId.set(d.id, d); } }
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
-      const seen = new Set(scOrder);
-      for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
-
-      const next = {
-        ...base,
-        shortcuts: merged,
-        scOrder,
-        showSc: typeof base.showSc === 'boolean' ? base.showSc : true,
-        activeTab: base.activeTab || INBOX_ID,
-      };
+      const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
+      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: base.activeTab || INBOX_ID };
       if (next.activeTab !== INBOX_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
 
-    initSync((loaded) => {
-      const next = normalizeLoaded(loaded);
-      setData(next);
-      setLoading(false);
-    }, (isSignedIn) => setSynced(isSignedIn));
+    initSync(
+      (loaded) => { setData(normalizeLoaded(loaded)); setLoading(false); },
+      (status) => { setSynced(status.signedIn); setAuthUser(status.user); },
+      (inv) => setInvites(inv || []),
+      (tp) => setTeamProjects(tp || [])
+    );
     return cleanup;
   }, []);
 
+  // ─── Subscribe to team tasks when viewing a team tab ───
+  useEffect(() => {
+    if (!isTeamTab || !teamId) return;
+    const unsub = subscribeTeamTasks(teamId, (tasks) => {
+      setTeamTasksMap(prev => ({ ...prev, [teamId]: tasks }));
+    });
+    return unsub;
+  }, [isTeamTab, teamId]);
+
+  // ─── Check for updates ───
+  useEffect(() => {
+    checkForUpdates().then(info => {
+      if (info?.isUpdateAvailable) setUpdateInfo(info);
+    }).catch(() => {});
+  }, []);
+
+  // ─── Auth ───
   const runAuth = async () => {
-    setAuthBusy(true);
-    setAuthErr('');
+    setAuthBusy(true); setAuthErr('');
     try {
       const email = authEmail.trim();
       if (!email || authPass.length < 6) throw new Error('Email + password (6+ chars) required');
       if (authMode === 'signup') await signUpEmail(email, authPass);
       else await signInEmail(email, authPass);
-      setAuthOpen(false);
-      setAuthPass('');
-    } catch (e) {
-      setAuthErr(e?.message || String(e));
-    } finally {
-      setAuthBusy(false);
-    }
+      setAuthOpen(false); setAuthPass('');
+    } catch (e) { setAuthErr(e?.message || String(e)); } finally { setAuthBusy(false); }
   };
-
   const runSignOut = async () => {
-    setAuthBusy(true);
-    setAuthErr('');
-    try {
-      await signOutUser();
-      setAuthOpen(false);
-    } catch (e) {
-      setAuthErr(e?.message || String(e));
-    } finally {
-      setAuthBusy(false);
-    }
+    setAuthBusy(true); setAuthErr('');
+    try { await signOutUser(); setAuthOpen(false); } catch (e) { setAuthErr(e?.message || String(e)); } finally { setAuthBusy(false); }
   };
 
   useEffect(() => { if (editingTab && editTabRef.current) editTabRef.current.focus(); }, [editingTab]);
@@ -447,101 +458,179 @@ export default function App() {
 
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
-  const detectProject = (text) => { const low = text.toLowerCase(); for (const p of projects) { if (low.includes(p.name.toLowerCase())) return p.id; if (p.keywords?.some(k => low.includes(k.toLowerCase()))) return p.id; } return null; };
+  // ─── Task operations ───
+  const detectProject = (text) => { const low = text.toLowerCase(); for (const p of projects) { if (p.isTeam) continue; if (low.includes(p.name.toLowerCase())) return p.id; if (p.keywords?.some(k => low.includes(k.toLowerCase()))) return p.id; } return null; };
 
   const insertTask = (afterIdx) => {
-    const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, ts: Date.now(), _new: true };
+    if (isTeamTab && teamId) {
+      // Team task creation
+      const vis = teamTasksMap[teamId] || [];
+      const afterOrder = afterIdx >= 0 && vis[afterIdx] ? vis[afterIdx].order : -1;
+      createTeamTask({ teamId, text: '', afterOrder }).catch(e => console.warn('Team task create failed:', e));
+      return;
+    }
+
+    const origin = isInbox ? 'inbox' : 'project';
+    const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, origin, ts: Date.now(), _new: true };
     up(prev => {
       const all = [...prev.tasks];
-      const vis = isInbox ? all.filter(t => t.projectId === INBOX_ID) : all.filter(t => t.projectId === prev.activeTab);
-      if (afterIdx < 0) {
-        const first = vis[0];
-        all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
-      } else {
-        const ref = vis[afterIdx];
-        all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt);
-      }
+      const vis = isInbox
+        ? all.filter(t => { const o = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project'); return o === 'inbox' && !t.hiddenFromInbox; })
+        : all.filter(t => t.projectId === prev.activeTab);
+      if (afterIdx < 0) { const first = vis[0]; all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt); }
+      else { const ref = vis[afterIdx]; all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt); }
       return { ...prev, tasks: all };
     });
   };
 
-  const changeTask = (id, text) => { up(prev => { let pid = prev.tasks.find(t => t.id === id)?.projectId; if (pid === INBOX_ID) { const d = detectProject(text); if (d) pid = d; } return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, _new: false } : t) }; }); };
-  const toggleTask = (id) => up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) }));
-  const deleteTask = (id) => up(p => ({ ...p, tasks: p.tasks.filter(t => t.id !== id) }));
-  const clearDone = () => { const ids = visible.filter(t => t.done).map(t => t.id); up(p => ({ ...p, tasks: p.tasks.filter(t => !ids.includes(t.id)) })); };
+  const changeTask = (id, text) => {
+    if (isTeamTab && teamId) {
+      updateTeamTask({ teamId, taskId: id, patch: { text } }).catch(e => console.warn('Team task update failed:', e));
+      return;
+    }
+    up(prev => {
+      let pid = prev.tasks.find(t => t.id === id)?.projectId;
+      const origin = prev.tasks.find(t => t.id === id)?.origin || 'inbox';
+      if (pid === INBOX_ID || origin === 'inbox') { const d = detectProject(text); if (d) pid = d; }
+      return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, _new: false } : t) };
+    });
+  };
 
+  const toggleTask = (id) => {
+    if (isTeamTab && teamId) {
+      const t = (teamTasksMap[teamId] || []).find(x => x.id === id);
+      if (t) updateTeamTask({ teamId, taskId: id, patch: { done: !t.done } }).catch(e => console.warn(e));
+      return;
+    }
+    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) }));
+  };
+
+  const deleteTask = (id) => {
+    if (isTeamTab && teamId) {
+      deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
+      return;
+    }
+    up(p => ({ ...p, tasks: p.tasks.filter(t => t.id !== id) }));
+  };
+
+  const hideFromInbox = (id) => {
+    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, hiddenFromInbox: true } : t) }));
+  };
+
+  const clearDone = () => {
+    if (isTeamTab && teamId) {
+      const doneTasks = (teamTasksMap[teamId] || []).filter(t => t.done);
+      doneTasks.forEach(t => deleteTeamTask({ teamId, taskId: t.id }).catch(() => {}));
+      return;
+    }
+    const ids = visible.filter(t => t.done).map(t => t.id);
+    up(p => ({ ...p, tasks: p.tasks.filter(t => !ids.includes(t.id)) }));
+  };
+
+  // ─── Project operations ───
   const addProject = () => { const c = TAB_COLORS[projects.length % TAB_COLORS.length]; const np = { id: genId(), name: 'New Project', color: c, keywords: [] }; up(p => ({ ...p, projects: [...p.projects, np], activeTab: np.id })); setEditingTab(np.id); setEditTabName('New Project'); };
-  const deleteProject = (id) => { up(p => ({ ...p, projects: p.projects.filter(x => x.id !== id), tasks: p.tasks.map(t => t.projectId === id ? { ...t, projectId: INBOX_ID } : t), activeTab: p.activeTab === id ? INBOX_ID : p.activeTab })); setContextMenu(null); };
+  const deleteProject = (id) => {
+    const pr = projects.find(p => p.id === id);
+    up(p => ({
+      ...p,
+      projects: p.projects.filter(x => x.id !== id),
+      // Tasks that originated from inbox go back to inbox-only; project-origin tasks get deleted
+      tasks: p.tasks.map(t => {
+        if (t.projectId !== id) return t;
+        if (t.origin === 'inbox') return { ...t, projectId: INBOX_ID, hiddenFromInbox: false };
+        return null;
+      }).filter(Boolean),
+      activeTab: p.activeTab === id ? INBOX_ID : p.activeTab
+    }));
+    setContextMenu(null);
+  };
   const finishEditTab = () => { if (!editingTab) return; const name = editTabName.trim() || 'Untitled'; up(p => ({ ...p, projects: p.projects.map(x => x.id === editingTab ? { ...x, name, keywords: [...new Set([...(x.keywords || []), name.toLowerCase()])] } : x) })); setEditingTab(null); };
   const changeTabColor = (id, color) => { up(p => ({ ...p, projects: p.projects.map(x => x.id === id ? { ...x, color } : x) })); setContextMenu(null); };
   const addKeyword = (pid, kw) => { if (!kw.trim()) return; up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: [...new Set([...(x.keywords || []), kw.trim().toLowerCase()])] } : x) })); };
   const removeKeyword = (pid, kw) => { up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: (x.keywords || []).filter(k => k !== kw) } : x) })); };
 
+  // ─── Team operations ───
+  const enableTeam = async (projId) => {
+    if (!synced) { setTeamErr('Sign in first to create team projects'); return; }
+    setTeamBusy(true); setTeamErr('');
+    try {
+      const pr = projects.find(p => p.id === projId);
+      const tid = await createTeamProject({ name: pr.name, color: pr.color });
+      // Migrate local tasks to team
+      const projTasks = tasks.filter(t => t.projectId === projId);
+      for (const t of projTasks) {
+        await createTeamTask({ teamId: tid, text: t.text });
+      }
+      // Update local project to team mode
+      up(p => ({
+        ...p,
+        projects: p.projects.map(x => x.id === projId ? { ...x, isTeam: true, teamId: tid } : x),
+        tasks: p.tasks.filter(t => t.projectId !== projId), // remove migrated tasks
+      }));
+    } catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
+  };
+
+  const sendInvite = async (tid) => {
+    if (!inviteEmail.trim()) return;
+    setTeamBusy(true); setTeamErr('');
+    try {
+      await sendTeamInvite({ teamId: tid, toEmail: inviteEmail.trim() });
+      setInviteEmail('');
+    } catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
+  };
+
+  const handleAcceptInvite = async (inviteId) => {
+    setTeamBusy(true);
+    try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); }
+  };
+
+  const handleDeclineInvite = async (inviteId) => {
+    try { await declineTeamInvite({ inviteId }); } catch (e) { console.warn(e); }
+  };
+
+  const saveNickname = async (tid, uid, nick) => {
+    try {
+      await updateTeamProject({ teamId: tid, patch: { [`nicknames.${uid}`]: nick.trim() || uid } });
+    } catch (e) { console.warn(e); }
+    setNickEditUid(null);
+  };
+
   const done = visible.filter(t => t.done).length, total = visible.length;
 
-  const autoIconForUrl = (url) => {
-    try {
-      const host = new URL(url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
-    } catch {
-      return '';
-    }
-  };
-
-  const openShortcutAdd = () => {
-    setScErr('');
-    setScDraft({ id: null, name: '', url: '', icon: '', color: '#888' });
-    setScOpen(true);
-  };
-  const openShortcutEdit = (sc) => {
-    setScErr('');
-    setScDraft({ ...sc });
-    setScOpen(true);
-  };
+  // ─── Shortcut helpers ───
+  const autoIconForUrl = (url) => { try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`; } catch { return ''; } };
+  const openShortcutAdd = () => { setScErr(''); setScDraft({ id: null, name: '', url: '', icon: '', color: '#888' }); setScOpen(true); };
+  const openShortcutEdit = (sc) => { setScErr(''); setScDraft({ ...sc }); setScOpen(true); };
   const saveShortcut = () => {
-    const name = scDraft.name.trim();
-    const url = scDraft.url.trim();
+    const name = scDraft.name.trim(); const url = scDraft.url.trim();
     if (!name || !url) { setScErr('Name + URL required'); return; }
-
-    const icon = (scDraft.icon || autoIconForUrl(url) || '').trim();
-    const color = scDraft.color || '#888';
-
+    const icon = (scDraft.icon || autoIconForUrl(url) || '').trim(); const color = scDraft.color || '#888';
     up(p => {
       const existing = (p.shortcuts?.length ? p.shortcuts : DEFAULT_SHORTCUTS);
       const order = (p.scOrder?.length ? p.scOrder : existing.map(s => s.id));
-
-      // Add
-      if (!scDraft.id) {
-        const id = `sc_${genId()}`;
-        const nextSc = [...existing, { id, name, url, icon, color }];
-        return { ...p, shortcuts: nextSc, scOrder: [...order, id] };
-      }
-
-      // Edit
-      const nextSc = existing.map(s => s.id === scDraft.id ? { ...s, name, url, icon, color } : s);
-      return { ...p, shortcuts: nextSc, scOrder: order };
+      if (!scDraft.id) { const id = `sc_${genId()}`; return { ...p, shortcuts: [...existing, { id, name, url, icon, color }], scOrder: [...order, id] }; }
+      return { ...p, shortcuts: existing.map(s => s.id === scDraft.id ? { ...s, name, url, icon, color } : s), scOrder: order };
     });
-
     setScOpen(false);
   };
-
-  const deleteShortcut = (id) => {
-    up(p => {
-      const existing = (p.shortcuts?.length ? p.shortcuts : DEFAULT_SHORTCUTS);
-      const order = (p.scOrder?.length ? p.scOrder : existing.map(s => s.id));
-      return {
-        ...p,
-        shortcuts: existing.filter(s => s.id !== id),
-        scOrder: order.filter(x => x !== id),
-      };
-    });
-  };
+  const deleteShortcut = (id) => { up(p => { const existing = (p.shortcuts?.length ? p.shortcuts : DEFAULT_SHORTCUTS); const order = (p.scOrder?.length ? p.scOrder : existing.map(s => s.id)); return { ...p, shortcuts: existing.filter(s => s.id !== id), scOrder: order.filter(x => x !== id) }; }); };
 
   return (
     <div className="tp-root">
+      {/* Update banner */}
+      {updateInfo && (
+        <div className="update-banner">
+          <span>Update v{updateInfo.latestVersion} available{updateInfo.notes ? ` — ${updateInfo.notes}` : ''}</span>
+          <div className="update-actions">
+            {updateInfo.downloadUrl && <a href={updateInfo.downloadUrl} target="_blank" rel="noopener noreferrer" className="update-dl">Download</a>}
+            <button className="update-x" onClick={() => setUpdateInfo(null)}>×</button>
+          </div>
+        </div>
+      )}
+
       <header className="tp-hdr">
         <div className="tp-hdr-l">
-          <span className="tp-logo">●</span><h1 className="tp-name">TaskPad</h1>
+          <span className="tp-logo">▮</span><h1 className="tp-name">TaskPad</h1>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -551,10 +640,17 @@ export default function App() {
           ) : (
             <span className="local-badge">local</span>
           )}
+          {/* Invite bell */}
+          {invites.length > 0 && (
+            <button className="invite-bell" onClick={() => setInvitesOpen(true)} title={`${invites.length} pending invite(s)`}>
+              🔔 <span className="invite-count">{invites.length}</span>
+            </button>
+          )}
         </div>
         <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}>{data.showSc ? '◫' : '◻'}</button>
       </header>
 
+      {/* Auth modal */}
       {isFirebaseConfigured() && authOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => !authBusy && setAuthOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -562,10 +658,9 @@ export default function App() {
               <div className="tp-modal-title">Sync</div>
               <button className="tp-modal-x" onClick={() => !authBusy && setAuthOpen(false)}>×</button>
             </div>
-
             {synced ? (
               <div className="tp-modal-body">
-                <div className="tp-modal-note">Signed in — your tasks are syncing.</div>
+                <div className="tp-modal-note">Signed in as {authUser?.email || 'unknown'} — your tasks are syncing.</div>
                 {authErr && <div className="tp-modal-err">{authErr}</div>}
                 <button className="tp-modal-btn" disabled={authBusy} onClick={runSignOut}>Sign out</button>
               </div>
@@ -587,10 +682,37 @@ export default function App() {
         </div>
       )}
 
+      {/* Invites modal */}
+      {invitesOpen && (
+        <div className="tp-modal-backdrop" onMouseDown={() => setInvitesOpen(false)}>
+          <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="tp-modal-h">
+              <div className="tp-modal-title">Team Invites</div>
+              <button className="tp-modal-x" onClick={() => setInvitesOpen(false)}>×</button>
+            </div>
+            <div className="tp-modal-body">
+              {invites.length === 0 && <div className="tp-modal-note">No pending invites.</div>}
+              {invites.map(inv => (
+                <div key={inv.id} className="invite-row">
+                  <div className="invite-info">
+                    <span className="invite-from">From: {inv.fromEmail || 'unknown'}</span>
+                    <span className="invite-proj">Project: {inv.projectId}</span>
+                  </div>
+                  <div className="invite-actions">
+                    <button className="invite-accept" disabled={teamBusy} onClick={() => handleAcceptInvite(inv.id)}>Accept</button>
+                    <button className="invite-decline" onClick={() => handleDeclineInvite(inv.id)}>Decline</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="tp-nav"><div className="tp-nav-scroll">
         <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => up(p => ({ ...p, activeTab: INBOX_ID }))} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <span className="tp-td" style={{ background: '#38bdf8' }} />Inbox
-          {isInbox && tasks.filter(t => t.projectId === INBOX_ID && !t.done).length > 0 && <span className="tp-tc">{tasks.filter(t => t.projectId === INBOX_ID && !t.done).length}</span>}
+          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
         </button>
         {projects.map(pr => (
           <div key={pr.id}>
@@ -602,10 +724,17 @@ export default function App() {
               <button className={`tp-t ${activeTab === pr.id ? 'tp-t-on' : ''}`}
                 onClick={() => up(p => ({ ...p, activeTab: pr.id }))}
                 onDoubleClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); }}
-                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pid: pr.id }); }}
+                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pid: pr.id }); setTeamErr(''); }}
                 style={{ borderBottomColor: activeTab === pr.id ? pr.color : 'transparent', background: activeTab === pr.id ? pr.color + '0a' : 'transparent' }}>
-                <span className="tp-td" style={{ background: pr.color }} />{pr.name}
-                {activeTab === pr.id && tasks.filter(t => t.projectId === pr.id && !t.done).length > 0 && <span className="tp-tc">{tasks.filter(t => t.projectId === pr.id && !t.done).length}</span>}
+                <span className="tp-td" style={{ background: pr.color }} />
+                {pr.isTeam && <span className="team-badge">👥</span>}
+                {pr.name}
+                {activeTab === pr.id && (() => {
+                  const count = pr.isTeam
+                    ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
+                    : tasks.filter(t => t.projectId === pr.id && !t.done).length;
+                  return count > 0 ? <span className="tp-tc">{count}</span> : null;
+                })()}
               </button>
             )}
           </div>
@@ -613,17 +742,69 @@ export default function App() {
         <button className="tp-t-add" onClick={addProject}>+</button>
       </div></nav>
 
+      {/* Context menu */}
       {contextMenu && (() => {
         const pr = projects.find(p => p.id === contextMenu.pid); if (!pr) return null;
+        const tp = pr.isTeam ? teamProjects.find(t => t.teamId === pr.teamId) : null;
         return (
-          <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 220), top: Math.min(contextMenu.y, window.innerHeight - 300) }} onClick={e => e.stopPropagation()}>
+          <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 260), top: Math.min(contextMenu.y, window.innerHeight - 400) }} onClick={e => e.stopPropagation()}>
             <button className="ctx-it" onClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); setContextMenu(null); }}>✏️ Rename</button>
             <div className="ctx-cols">{TAB_COLORS.map(c => <button key={c} className="ctx-dot" style={{ background: c }} onClick={() => changeTabColor(pr.id, c)} />)}</div>
-            <div className="ctx-kw">
-              <span className="ctx-kw-lbl">Auto-detect keywords:</span>
-              <div className="ctx-kw-list">{(pr.keywords || []).map(k => <span key={k} className="kw-pill">{k}<button onClick={() => removeKeyword(pr.id, k)}>×</button></span>)}</div>
-              <input className="kw-in" placeholder="Add keyword + Enter" onKeyDown={e => { if (e.key === 'Enter' && e.target.value.trim()) { addKeyword(pr.id, e.target.value); e.target.value = ''; } }} />
-            </div>
+
+            {!pr.isTeam && (
+              <div className="ctx-kw">
+                <span className="ctx-kw-lbl">Auto-detect keywords:</span>
+                <div className="ctx-kw-list">{(pr.keywords || []).map(k => <span key={k} className="kw-pill">{k}<button onClick={() => removeKeyword(pr.id, k)}>×</button></span>)}</div>
+                <input className="kw-in" placeholder="Add keyword + Enter" onKeyDown={e => { if (e.key === 'Enter' && e.target.value.trim()) { addKeyword(pr.id, e.target.value); e.target.value = ''; } }} />
+              </div>
+            )}
+
+            {/* Team section */}
+            {!pr.isTeam && isFirebaseConfigured() && (
+              <div className="ctx-team-section">
+                <button className="ctx-it" disabled={teamBusy} onClick={() => enableTeam(pr.id)}>
+                  👥 {teamBusy ? 'Converting...' : 'Make Team Project'}
+                </button>
+                {!synced && <div className="ctx-team-note">Sign in first to enable team</div>}
+              </div>
+            )}
+
+            {pr.isTeam && tp && (
+              <div className="ctx-team-section">
+                <span className="ctx-kw-lbl">👥 Team Project</span>
+
+                {/* Members + nicknames */}
+                <div className="team-members">
+                  {(tp.memberEmails || []).map((email, i) => {
+                    const uid = (tp.memberUids || [])[i];
+                    const nick = tp.nicknames?.[uid] || email.split('@')[0];
+                    return (
+                      <div key={email} className="team-member">
+                        {nickEditUid === uid ? (
+                          <input className="kw-in" autoFocus value={nickEditVal} onChange={e => setNickEditVal(e.target.value)}
+                            onBlur={() => saveNickname(pr.teamId, uid, nickEditVal)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveNickname(pr.teamId, uid, nickEditVal); if (e.key === 'Escape') setNickEditUid(null); }} />
+                        ) : (
+                          <span className="team-member-info" onClick={() => { setNickEditUid(uid); setNickEditVal(nick); }}>
+                            <span className="team-nick">{nick}</span>
+                            <span className="team-email">{email}</span>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Invite */}
+                <div className="team-invite">
+                  <input className="kw-in" placeholder="Invite by email + Enter" value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') sendInvite(pr.teamId); }} />
+                </div>
+              </div>
+            )}
+
+            {teamErr && <div className="tp-modal-err" style={{ padding: '4px 12px', fontSize: 11 }}>{teamErr}</div>}
             <button className="ctx-it ctx-del" onClick={() => deleteProject(pr.id)}>🗑 Delete project</button>
           </div>
         );
@@ -643,7 +824,9 @@ export default function App() {
           {visible.map((task, idx) => (
             <div key={task.id}>
               <TaskLine task={task} allProjects={projects} accentColor={accent} isInbox={isInbox}
+                isTeam={isTeamTab} nicknames={teamProjData?.nicknames}
                 onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
+                onHide={isInbox ? hideFromInbox : null}
                 dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
                 refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
               {!isTaskDragging && <InsertZone onClick={() => insertTask(idx)} color={accent} />}
@@ -660,12 +843,12 @@ export default function App() {
                 onDragStart={(e, forcedX) => onScDrag(e, s.id, forcedX)} style={getScStyle(s.id)}
                 refCb={el => { if (el) scRefs.current[s.id] = el; }} />
             ))}
-
             <button className="sc-add" onClick={openShortcutAdd} title="Add shortcut">+</button>
           </div>
         </div>
       )}
 
+      {/* Shortcuts modal — entire row clickable */}
       {scOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => setScOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -676,19 +859,18 @@ export default function App() {
             <div className="tp-modal-body">
               <div className="sc-list">
                 {(orderedSc || []).map(sc => (
-                  <div key={sc.id} className="sc-li">
-                    <div className="sc-li-l" onClick={() => openShortcutEdit(sc)}>
+                  <div key={sc.id} className="sc-li" onClick={() => openShortcutEdit(sc)}>
+                    <div className="sc-li-l">
                       <img src={sc.icon} alt="" width="16" height="16" onError={e => { e.target.style.display = 'none'; }} />
                       <span className="sc-li-name">{sc.name}</span>
                     </div>
                     <div className="sc-li-r">
-                      <button className="sc-li-btn" onClick={() => openShortcutEdit(sc)}>Edit</button>
-                      <button className="sc-li-btn sc-li-del" onClick={() => deleteShortcut(sc.id)}>Remove</button>
+                      <button className="sc-li-btn" onClick={(e) => { e.stopPropagation(); openShortcutEdit(sc); }}>Edit</button>
+                      <button className="sc-li-btn sc-li-del" onClick={(e) => { e.stopPropagation(); deleteShortcut(sc.id); }}>Remove</button>
                     </div>
                   </div>
                 ))}
               </div>
-
               <div className="sc-form">
                 <div className="sc-form-h">{scDraft.id ? 'Edit shortcut' : 'Add shortcut'}</div>
                 <input className="tp-modal-in" placeholder="Name" value={scDraft.name} onChange={e => setScDraft(d => ({ ...d, name: e.target.value }))} />

@@ -21,10 +21,21 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      allow read: if isProjectMember(projectId);
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.ownerUid ||
+        request.auth.uid in resource.data.memberUids
+      );
 
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if isSignedIn() && request.auth.uid == resource.data.ownerUid;
+
+      // Allow update by: owner, existing members, or a user joining via invite
+      // (user is in the NEW memberUids but not the current one = joining)
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.ownerUid ||
+        request.auth.uid in resource.data.memberUids ||
+        request.auth.uid in request.resource.data.memberUids
+      );
+
       allow delete: if false;
 
       match /tasks/{taskId} {
@@ -34,7 +45,11 @@ service cloud.firestore {
     }
 
     match /invites/{inviteId} {
-      allow read: if isSignedIn() && request.auth.token.email == resource.data.toEmail;
+      // Read own invites, or invites from projects you're a member of
+      allow read: if isSignedIn() && (
+        request.auth.token.email == resource.data.toEmail ||
+        resource.data.fromUid == request.auth.uid
+      );
 
       allow create: if isSignedIn()
         && request.resource.data.fromUid == request.auth.uid

@@ -20,9 +20,19 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-root { width: 100%; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
 .loading { height: 100vh; display: flex; align-items: center; justify-content: center; color: #444; font-family: var(--fm); background: var(--bg); }
 
+/* ─── Update banner ─── */
+.update-banner { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #1a2332; border-bottom: 1px solid #38bdf833; flex-shrink: 0; gap: 12px; }
+.update-banner span { font-size: 12px; font-family: var(--fm); color: #38bdf8; }
+.update-actions { display: flex; align-items: center; gap: 8px; }
+.update-dl { font-size: 11px; font-family: var(--fm); color: #38bdf8; border: 1px solid #38bdf844; padding: 3px 10px; border-radius: 6px; text-decoration: none; }
+.update-dl:hover { background: #38bdf811; border-color: #38bdf8; }
+.update-x { background: none; border: none; color: #555; font-size: 16px; cursor: pointer; padding: 0 4px; }
+.update-x:hover { color: #999; }
+
+/* ─── Header ─── */
 .tp-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 10px; border-bottom: 1px solid var(--b); flex-shrink: 0; }
 .tp-hdr-l { display: flex; align-items: center; gap: 10px; }
-.tp-logo { font-size: 18px; color: #38bdf8; }
+.tp-logo { font-size: 16px; color: #38bdf8; line-height: 1; }
 .tp-name { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; color: #e8e8e8; }
 .sync-dot { font-size: 12px; color: #4ecdc4; animation: spin 2s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -30,6 +40,12 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-sc-toggle { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .tp-sc-toggle:hover { border-color: #333; color: #888; }
 
+/* ─── Invite bell ─── */
+.invite-bell { background: none; border: 1px solid #fbbf2444; color: #fbbf24; font-size: 12px; padding: 2px 8px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.invite-bell:hover { background: #fbbf2411; border-color: #fbbf24; }
+.invite-count { font-family: var(--fm); font-size: 10px; font-weight: 600; }
+
+/* ─── Nav ─── */
 .tp-nav { border-bottom: 1px solid var(--b); flex-shrink: 0; }
 .tp-nav-scroll { display: flex; align-items: center; overflow-x: auto; padding: 0 12px; scrollbar-width: none; }
 .tp-nav-scroll::-webkit-scrollbar { display: none; }
@@ -41,10 +57,13 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-t-edit { color: #e8e8e8; background: #141414; outline: none; border-radius: 0; }
 .tp-t-add { background: none; border: 1px dashed #2a2a2a; color: #555; font-size: 16px; cursor: pointer; padding: 3px 10px; border-radius: 6px; margin-left: 8px; font-family: var(--fm); line-height: 1; }
 .tp-t-add:hover { border-color: #444; color: #888; }
+.team-badge { font-size: 10px; }
 
-.tp-ctx { position: fixed; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 210px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+/* ─── Context menu ─── */
+.tp-ctx { position: fixed; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 240px; box-shadow: 0 8px 30px rgba(0,0,0,.5); max-height: 80vh; overflow-y: auto; }
 .ctx-it { display: block; width: 100%; background: none; border: none; color: #ccc; font-family: var(--fu); font-size: 13px; padding: 8px 12px; cursor: pointer; text-align: left; border-radius: 6px; }
 .ctx-it:hover { background: #252525; }
+.ctx-it:disabled { opacity: 0.5; cursor: not-allowed; }
 .ctx-del { color: #ff4444 !important; }
 .ctx-cols { display: flex; gap: 5px; padding: 8px 12px; flex-wrap: wrap; }
 .ctx-dot { width: 18px; height: 18px; border-radius: 50%; border: none; cursor: pointer; transition: transform .1s; }
@@ -58,6 +77,18 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .kw-in { width: 100%; background: #141414; border: 1px solid #252525; border-radius: 4px; padding: 5px 8px; color: var(--t); font-family: var(--fm); font-size: 11px; outline: none; }
 .kw-in::placeholder { color: #444; }
 
+/* ─── Team section in context menu ─── */
+.ctx-team-section { padding: 6px 0; border-top: 1px solid #252525; margin-top: 4px; }
+.ctx-team-note { font-size: 10px; color: #555; font-family: var(--fm); padding: 2px 12px; }
+.team-members { padding: 4px 12px; display: flex; flex-direction: column; gap: 4px; }
+.team-member { display: flex; align-items: center; gap: 8px; }
+.team-member-info { cursor: pointer; display: flex; flex-direction: column; gap: 1px; flex: 1; padding: 3px 0; }
+.team-member-info:hover .team-nick { color: #bbb; }
+.team-nick { font-size: 12px; font-family: var(--fm); color: #888; }
+.team-email { font-size: 9px; font-family: var(--fm); color: #444; }
+.team-invite { padding: 6px 12px; }
+
+/* ─── Body ─── */
 .tp-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .tp-prog { display: flex; align-items: center; gap: 10px; padding: 12px 20px 6px; flex-shrink: 0; }
 .tp-pbar { flex: 1; height: 3px; background: var(--b); border-radius: 2px; overflow: hidden; }
@@ -73,9 +104,11 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--tm); font-size: 13px; font-family: var(--fm); gap: 8px; cursor: pointer; }
 .tp-empty:hover { color: #555; }
 
+/* ─── Tasks ─── */
 .task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; will-change: transform; }
 .task-row:hover { background: var(--sh); }
 .task-row:hover .del-btn { color: #444; }
+.task-row:hover .hide-btn { color: #444; }
 .task-done { opacity: .4; }
 
 .drag-grip { color: #333; font-size: 12px; cursor: grab; padding: 2px 4px; border-radius: 4px; line-height: 1; letter-spacing: -2px; user-select: none; flex-shrink: 0; touch-action: none; }
@@ -90,13 +123,21 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .task-done .task-text { text-decoration: line-through; color: #555; }
 .task-input { flex: 1; min-width: 100px; width: 100%; background: transparent; border: none; border-bottom: 1px solid #333; padding: 2px 0; color: var(--t); font-family: var(--fm); font-size: 13px; outline: none; resize: none; overflow: hidden; line-height: 1.4; }
 .task-tag { font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+.task-author { font-size: 9px; font-family: var(--fm); font-weight: 500; color: #555; background: #1a1a1a; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+
+/* Hide from inbox button */
+.hide-btn { background: none; border: none; color: transparent; font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1; border-radius: 4px; transition: color .15s; flex-shrink: 0; }
+.hide-btn:hover { color: #888 !important; }
+
 .del-btn { background: none; border: none; color: transparent; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 4px; transition: color .15s; flex-shrink: 0; }
 .del-btn:hover { color: #ff4444 !important; }
 
+/* ─── Insert zone ─── */
 .ins-zone { height: 10px; position: relative; cursor: pointer; display: flex; align-items: center; padding: 0 12px; }
 .ins-line { position: absolute; left: 12px; right: 12px; height: 2px; border-radius: 1px; transition: opacity .15s; display: flex; align-items: center; justify-content: center; }
 .ins-plus { font-size: 11px; font-weight: 700; background: var(--bg); padding: 0 4px; border: 1px solid; border-radius: 3px; line-height: 1.2; font-family: var(--fm); }
 
+/* ─── Shortcuts bar ─── */
 .sc-bar { border-top: 1px solid var(--b); padding: 10px 16px; flex-shrink: 0; background: #0a0a0a; }
 .sc-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; align-items: center; padding: 2px 0; }
 .sc-row::-webkit-scrollbar { display: none; }
@@ -109,11 +150,11 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-add { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px dashed #2a2a2a; color: #555; font-family: var(--fm); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
 .sc-add:hover { border-color: #444; color: #aaa; background: #101010; }
 
-/* Shortcuts modal */
+/* ─── Shortcuts modal ─── */
 .sc-list { border: 1px solid #222; border-radius: 12px; background: #0b0b0b; padding: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
-.sc-li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 10px; }
+.sc-li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 10px; cursor: pointer; }
 .sc-li:hover { background: #101010; }
-.sc-li-l { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.sc-li-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .sc-li-l img { border-radius: 3px; }
 .sc-li-name { font-family: var(--fm); font-size: 12px; color: #bbb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-li-r { display: flex; gap: 6px; flex-shrink: 0; }
@@ -124,9 +165,22 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-form { border-top: 1px solid #1a1a1a; padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
 .sc-form-h { font-family: var(--fm); font-size: 11px; color: #666; }
 
+/* ─── Invite rows ─── */
+.invite-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px; border: 1px solid #222; border-radius: 8px; }
+.invite-info { display: flex; flex-direction: column; gap: 2px; }
+.invite-from { font-size: 12px; font-family: var(--fm); color: #bbb; }
+.invite-proj { font-size: 10px; font-family: var(--fm); color: #555; }
+.invite-actions { display: flex; gap: 6px; }
+.invite-accept { background: #1a2a1a; border: 1px solid #34d39944; color: #34d399; font-family: var(--fm); font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.invite-accept:hover { background: #1a3a1a; border-color: #34d399; }
+.invite-accept:disabled { opacity: 0.5; cursor: not-allowed; }
+.invite-decline { background: none; border: 1px solid #333; color: #666; font-family: var(--fm); font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.invite-decline:hover { border-color: #555; color: #999; }
+
+/* ─── Footer ─── */
 .tp-foot { padding: 6px 16px 8px; font-size: 10px; color: #222; font-family: var(--fm); text-align: center; flex-shrink: 0; }
 
-/* --- Sync / Auth --- */
+/* ─── Sync / Auth ─── */
 .tp-auth-btn { background: transparent; border: 1px solid var(--bl); color: #666; font-size: 11px; padding: 2px 8px; border-radius: 999px; cursor: pointer; line-height: 1.6; }
 .tp-auth-btn:hover { border-color: #333; color: #aaa; background: #101010; }
 
