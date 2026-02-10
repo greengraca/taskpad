@@ -1,14 +1,4 @@
-// ============================================================
-// FIREBASE SETUP — Follow the README to get these values
-// ============================================================
-// 1. Go to https://console.firebase.google.com/
-// 2. Create a new project (or use an existing one)
-// 3. Go to Project Settings → General → Your apps → Add web app
-// 4. Copy the config values below
-// 5. Enable Firestore in Build → Firestore Database → Create database
-// 6. Enable Email/Password Auth in Build → Authentication → Sign-in method
-// ============================================================
-
+// src/firebase.js
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import {
@@ -19,18 +9,23 @@ import {
   signOut,
 } from 'firebase/auth';
 
+// Read config from Vite env vars (works for Vercel + local builds)
 const firebaseConfig = {
-  apiKey: "AIzaSyD6g1Laotwvv01dDcLb4iNZE-ySq6BCVPo",
-  authDomain: "taskpad-76210.firebaseapp.com",
-  projectId: "taskpad-76210",
-  storageBucket: "taskpad-76210.firebasestorage.app",
-  messagingSenderId: "165523587560",
-  appId: "1:165523587560:web:04cae1d27380f97792645d"
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Check if Firebase is configured
 export const isFirebaseConfigured = () => {
-  return firebaseConfig.apiKey !== "YOUR_API_KEY";
+  return !!(
+    firebaseConfig.apiKey &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.projectId &&
+    firebaseConfig.appId
+  );
 };
 
 let app, db, auth;
@@ -43,7 +38,6 @@ if (isFirebaseConfigured()) {
 
 export { db, auth };
 
-// Auth helpers
 export const subscribeAuth = (cb) => {
   if (!isFirebaseConfigured()) return () => {};
   return onAuthStateChanged(auth, cb);
