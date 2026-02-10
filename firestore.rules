@@ -1,12 +1,49 @@
-// Paste these rules in Firebase Console → Firestore → Rules
-// These rules ensure only YOU can read/write YOUR data
-
+// Firestore security rules
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isProjectMember(projectId) {
+      let proj = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      return isSignedIn() && (
+        request.auth.uid == proj.ownerUid ||
+        request.auth.uid in proj.memberUids
+      );
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /projects/{projectId} {
+      allow read: if isProjectMember(projectId);
+
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.ownerUid;
+      allow delete: if false;
+
+      match /tasks/{taskId} {
+        allow read: if isProjectMember(projectId);
+        allow create, update, delete: if isProjectMember(projectId);
+      }
+    }
+
+    match /invites/{inviteId} {
+      allow read: if isSignedIn() && request.auth.token.email == resource.data.toEmail;
+
+      allow create: if isSignedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && isProjectMember(request.resource.data.projectId);
+
+      allow update: if isSignedIn()
+        && request.auth.token.email == resource.data.toEmail;
+
+      allow delete: if false;
     }
   }
 }

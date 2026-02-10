@@ -6,22 +6,26 @@ const DEFAULT_SHORTCUTS = [
   { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64', color: '#fff' },
   { id: 'gh', name: 'GitHub', url: 'https://github.com', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64', color: '#e6edf3' },
   { id: 'nf', name: 'Netlify', url: 'https://app.netlify.com', icon: 'https://www.google.com/s2/favicons?domain=netlify.com&sz=64', color: '#32e6e2' },
+
+  // Local icons (more reliable in Tauri)
   { id: 'gm', name: 'Gmail', url: 'https://mail.google.com', icon: '/shortcuts/gmail.svg', color: '#ea4335' },
+  { id: 'jg', name: 'Portfolio', url: 'https://www.joaograca.work/', icon: '/shortcuts/portfolio.png', color: '#7eb8da' },
+  { id: 'fb', name: 'Firebase', url: 'https://console.firebase.google.com/', icon: '/shortcuts/firebase.svg', color: '#fbbf24' },
+
   { id: 'ae', name: 'AliExpress', url: 'https://www.aliexpress.com', icon: 'https://www.google.com/s2/favicons?domain=aliexpress.com&sz=64', color: '#e43225' },
   { id: 'et', name: 'Etsy', url: 'https://www.etsy.com/your/shops/me/dashboard', icon: 'https://www.google.com/s2/favicons?domain=etsy.com&sz=64', color: '#f1641e' },
   { id: 'db', name: 'MongoDB', url: 'https://cloud.mongodb.com/', icon: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64', color: '#00ed64' },
-  { id: 'fb', name: 'Firebase', url: 'https://console.firebase.google.com/', icon: '/shortcuts/firebase.svg', color: '#fbbf24' },
   { id: 'ai', name: 'ChatGPT', url: 'https://chat.openai.com', icon: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64', color: '#10a37f' },
   { id: 'cl', name: 'Claude', url: 'https://claude.ai', icon: 'https://www.google.com/s2/favicons?domain=claude.ai&sz=64', color: '#d4a574' },
   { id: 'li', name: 'LinkedIn', url: 'https://www.linkedin.com', icon: 'https://www.google.com/s2/favicons?domain=linkedin.com&sz=64', color: '#0a66c2' },
   { id: 'hk', name: 'Heroku', url: 'https://dashboard.heroku.com', icon: 'https://www.google.com/s2/favicons?domain=heroku.com&sz=64', color: '#9e7cc1' },
-  { id: 'jg', name: 'Portfolio', url: 'https://www.joaograca.work/', icon: '/shortcuts/portfolio.png', color: '#7eb8da' },
   { id: 'sf', name: 'Scryfall', url: 'https://scryfall.com', icon: 'https://www.google.com/s2/favicons?domain=scryfall.com&sz=64', color: '#e0a526' },
   { id: 'cm', name: 'Cardmarket', url: 'https://www.cardmarket.com', icon: 'https://www.google.com/s2/favicons?domain=cardmarket.com&sz=64', color: '#1a82c4' },
   { id: 'yt', name: 'YouTube', url: 'https://www.youtube.com', icon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64', color: '#ff0000' },
 ];
 
-const TAB_COLORS = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#a78bfa', '#f472b6', '#38bdf8', '#fb923c', '#34d399'];
+// +4 colors (12 total)
+const TAB_COLORS = ['#38bdf8', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#ffe66d', '#4ecdc4', '#ff6b6b', '#22c55e', '#60a5fa', '#f59e0b', '#14b8a6'];
 const INBOX_ID = '__inbox__';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const EMPTY = [];
@@ -33,7 +37,11 @@ const DEFAULT_DATA = {
     { id: 'w2', text: 'Click between tasks to insert new ones', done: false, projectId: INBOX_ID, ts: Date.now() },
     { id: 'w3', text: 'Hold a shortcut icon ~0.6s to unlock drag mode', done: false, projectId: INBOX_ID, ts: Date.now() },
   ],
-  activeTab: INBOX_ID, scOrder: DEFAULT_SHORTCUTS.map(s => s.id), showSc: true,
+  // per-account shortcuts
+  shortcuts: DEFAULT_SHORTCUTS,
+  scOrder: DEFAULT_SHORTCUTS.map(s => s.id),
+  showSc: true,
+  activeTab: INBOX_ID,
 };
 
 // ─── Vertical drag reorder ───
@@ -221,8 +229,36 @@ function TaskLine({ task, allProjects, accentColor, isInbox, onToggle, onDelete,
   const inputRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
+  useEffect(() => {
+    if (!editing || !inputRef.current) return;
+    const el = inputRef.current;
+    // Auto-grow textarea as you add bullet lines
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
+
+  const insertBullet = (e) => {
+    // Shift+Enter -> add a bullet line
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      const el = e.target;
+      const start = el.selectionStart ?? text.length;
+      const end = el.selectionEnd ?? text.length;
+      const bullet = `\n- `;
+      const next = text.slice(0, start) + bullet + text.slice(end);
+      setText(next);
+      requestAnimationFrame(() => {
+        try {
+          const pos = start + bullet.length;
+          el.selectionStart = el.selectionEnd = pos;
+        } catch {}
+      });
+      return true;
+    }
+    return false;
+  };
 
   return (
     <div className={`task-row ${task.done ? 'task-done' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
@@ -234,9 +270,22 @@ function TaskLine({ task, allProjects, accentColor, isInbox, onToggle, onDelete,
       </button>
       <div className="task-body" onClick={() => !editing && setEditing(true)}>
         {editing ? (
-          <input ref={inputRef} className="task-input" value={text} onChange={e => setText(e.target.value)} onBlur={commit}
-            onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
-        ) : (<span className="task-text">{task.text}</span>)}
+          <textarea
+            ref={inputRef}
+            className="task-input"
+            rows={1}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (insertBullet(e)) return;
+              if (e.key === 'Enter') e.target.blur();
+              if (e.key === 'Escape') { setEditing(false); setText(task.text); }
+            }}
+          />
+        ) : (
+          <span className="task-text" style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
+        )}
         {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
       </div>
       <button onClick={() => onDelete(task.id)} className="del-btn">×</button>
@@ -277,13 +326,20 @@ export default function App() {
   const tasks = data?.tasks || EMPTY;
   const activeTab = data?.activeTab || INBOX_ID;
   const isInbox = activeTab === INBOX_ID;
-  const visible = isInbox ? tasks : tasks.filter(t => t.projectId === activeTab);
+  const inboxTasks = tasks.filter(t => t.projectId === INBOX_ID);
+  // Inbox should ONLY show inbox tasks
+  const visible = isInbox ? inboxTasks : tasks.filter(t => t.projectId === activeTab);
   const activeProj = projects.find(p => p.id === activeTab);
-  const accent = isInbox ? '#ff6b6b' : (activeProj?.color || '#ff6b6b');
-  const savedSc = Array.isArray(data?.scOrder) ? data.scOrder : [];
-  const defaultSc = DEFAULT_SHORTCUTS.map(s => s.id);
-  const scIds = [...savedSc, ...defaultSc.filter(id => !savedSc.includes(id))];
-  const orderedSc = scIds.map(id => DEFAULT_SHORTCUTS.find(s => s.id === id)).filter(Boolean);
+  const accent = isInbox ? '#38bdf8' : (activeProj?.color || '#38bdf8');
+
+  const shortcuts = data?.shortcuts?.length ? data.shortcuts : DEFAULT_SHORTCUTS;
+  const scIds = (data?.scOrder?.length ? data.scOrder : shortcuts.map(s => s.id));
+  const orderedSc = scIds.map(id => shortcuts.find(s => s.id === id)).filter(Boolean);
+
+  // Shortcuts modal
+  const [scOpen, setScOpen] = useState(false);
+  const [scDraft, setScDraft] = useState({ id: null, name: '', url: '', icon: '', color: '#888' });
+  const [scErr, setScErr] = useState('');
 
   const up = useCallback((fn) => {
     setData(prev => {
@@ -297,7 +353,13 @@ export default function App() {
   const reorderVisible = useCallback((newVis) => {
     up(prev => {
       if (!prev) return prev;
-      if (prev.activeTab === INBOX_ID) return { ...prev, tasks: newVis };
+      if (prev.activeTab === INBOX_ID) {
+        // Replace only the inbox tasks in-place, leaving project tasks untouched.
+        const inboxIdxs = prev.tasks.map((t, i) => (t.projectId === INBOX_ID ? i : -1)).filter(i => i >= 0);
+        const tasksCopy = [...prev.tasks];
+        inboxIdxs.forEach((idx, j) => { tasksCopy[idx] = newVis[j]; });
+        return { ...prev, tasks: tasksCopy };
+      }
       const at = prev.activeTab;
       const others = prev.tasks.filter(t => t.projectId !== at);
       const firstIdx = prev.tasks.findIndex(t => t.projectId === at);
@@ -312,9 +374,39 @@ export default function App() {
   const { itemRefs: scRefs, onPointerDown: onScDrag, getStyle: getScStyle } = useHDragReorder(orderedSc, reorderSc);
 
   useEffect(() => {
+    const normalizeLoaded = (loaded) => {
+      const base = loaded && Array.isArray(loaded.tasks) ? { ...DEFAULT_DATA, ...loaded } : { ...DEFAULT_DATA };
+
+      // Shortcuts: keep per-account custom shortcuts, but auto-add any new defaults.
+      const savedShortcuts = Array.isArray(base.shortcuts) && base.shortcuts.length ? base.shortcuts : DEFAULT_SHORTCUTS;
+      const byId = new Map(savedShortcuts.map(s => [s.id, s]));
+      const merged = [...savedShortcuts];
+      for (const d of DEFAULT_SHORTCUTS) {
+        if (!byId.has(d.id)) {
+          merged.push(d);
+          byId.set(d.id, d);
+        }
+      }
+      let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
+      scOrder = scOrder.filter(id => byId.has(id));
+      const seen = new Set(scOrder);
+      for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
+
+      const next = {
+        ...base,
+        shortcuts: merged,
+        scOrder,
+        showSc: typeof base.showSc === 'boolean' ? base.showSc : true,
+        activeTab: base.activeTab || INBOX_ID,
+      };
+      if (next.activeTab !== INBOX_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
+      return next;
+    };
+
     initSync((loaded) => {
-      if (!loaded.tasks) loaded = { ...DEFAULT_DATA, ...loaded };
-      setData(loaded); setLoading(false);
+      const next = normalizeLoaded(loaded);
+      setData(next);
+      setLoading(false);
     }, (isSignedIn) => setSynced(isSignedIn));
     return cleanup;
   }, []);
@@ -360,9 +452,15 @@ export default function App() {
   const insertTask = (afterIdx) => {
     const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, ts: Date.now(), _new: true };
     up(prev => {
-      const all = [...prev.tasks]; const vis = isInbox ? all : all.filter(t => t.projectId === prev.activeTab);
-      if (afterIdx < 0) { const first = vis[0]; all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt); }
-      else { const ref = vis[afterIdx]; all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt); }
+      const all = [...prev.tasks];
+      const vis = isInbox ? all.filter(t => t.projectId === INBOX_ID) : all.filter(t => t.projectId === prev.activeTab);
+      if (afterIdx < 0) {
+        const first = vis[0];
+        all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
+      } else {
+        const ref = vis[afterIdx];
+        all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt);
+      }
       return { ...prev, tasks: all };
     });
   };
@@ -381,11 +479,69 @@ export default function App() {
 
   const done = visible.filter(t => t.done).length, total = visible.length;
 
+  const autoIconForUrl = (url) => {
+    try {
+      const host = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+    } catch {
+      return '';
+    }
+  };
+
+  const openShortcutAdd = () => {
+    setScErr('');
+    setScDraft({ id: null, name: '', url: '', icon: '', color: '#888' });
+    setScOpen(true);
+  };
+  const openShortcutEdit = (sc) => {
+    setScErr('');
+    setScDraft({ ...sc });
+    setScOpen(true);
+  };
+  const saveShortcut = () => {
+    const name = scDraft.name.trim();
+    const url = scDraft.url.trim();
+    if (!name || !url) { setScErr('Name + URL required'); return; }
+
+    const icon = (scDraft.icon || autoIconForUrl(url) || '').trim();
+    const color = scDraft.color || '#888';
+
+    up(p => {
+      const existing = (p.shortcuts?.length ? p.shortcuts : DEFAULT_SHORTCUTS);
+      const order = (p.scOrder?.length ? p.scOrder : existing.map(s => s.id));
+
+      // Add
+      if (!scDraft.id) {
+        const id = `sc_${genId()}`;
+        const nextSc = [...existing, { id, name, url, icon, color }];
+        return { ...p, shortcuts: nextSc, scOrder: [...order, id] };
+      }
+
+      // Edit
+      const nextSc = existing.map(s => s.id === scDraft.id ? { ...s, name, url, icon, color } : s);
+      return { ...p, shortcuts: nextSc, scOrder: order };
+    });
+
+    setScOpen(false);
+  };
+
+  const deleteShortcut = (id) => {
+    up(p => {
+      const existing = (p.shortcuts?.length ? p.shortcuts : DEFAULT_SHORTCUTS);
+      const order = (p.scOrder?.length ? p.scOrder : existing.map(s => s.id));
+      return {
+        ...p,
+        shortcuts: existing.filter(s => s.id !== id),
+        scOrder: order.filter(x => x !== id),
+      };
+    });
+  };
+
   return (
     <div className="tp-root">
       <header className="tp-hdr">
         <div className="tp-hdr-l">
-          <span className="tp-logo">▪</span><h1 className="tp-name">TaskPad</h1>
+          <span className="tp-logo">●</span><h1 className="tp-name">TaskPad</h1>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -432,9 +588,9 @@ export default function App() {
       )}
 
       <nav className="tp-nav"><div className="tp-nav-scroll">
-        <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => up(p => ({ ...p, activeTab: INBOX_ID }))} style={{ borderBottomColor: isInbox ? '#ff6b6b' : 'transparent' }}>
-          <span className="tp-td" style={{ background: '#ff6b6b' }} />Inbox
-          {isInbox && tasks.filter(t => !t.done).length > 0 && <span className="tp-tc">{tasks.filter(t => !t.done).length}</span>}
+        <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => up(p => ({ ...p, activeTab: INBOX_ID }))} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
+          <span className="tp-td" style={{ background: '#38bdf8' }} />Inbox
+          {isInbox && tasks.filter(t => t.projectId === INBOX_ID && !t.done).length > 0 && <span className="tp-tc">{tasks.filter(t => t.projectId === INBOX_ID && !t.done).length}</span>}
         </button>
         {projects.map(pr => (
           <div key={pr.id}>
@@ -504,6 +660,45 @@ export default function App() {
                 onDragStart={(e, forcedX) => onScDrag(e, s.id, forcedX)} style={getScStyle(s.id)}
                 refCb={el => { if (el) scRefs.current[s.id] = el; }} />
             ))}
+
+            <button className="sc-add" onClick={openShortcutAdd} title="Add shortcut">+</button>
+          </div>
+        </div>
+      )}
+
+      {scOpen && (
+        <div className="tp-modal-backdrop" onMouseDown={() => setScOpen(false)}>
+          <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="tp-modal-h">
+              <div className="tp-modal-title">Shortcuts</div>
+              <button className="tp-modal-x" onClick={() => setScOpen(false)}>×</button>
+            </div>
+            <div className="tp-modal-body">
+              <div className="sc-list">
+                {(orderedSc || []).map(sc => (
+                  <div key={sc.id} className="sc-li">
+                    <div className="sc-li-l" onClick={() => openShortcutEdit(sc)}>
+                      <img src={sc.icon} alt="" width="16" height="16" onError={e => { e.target.style.display = 'none'; }} />
+                      <span className="sc-li-name">{sc.name}</span>
+                    </div>
+                    <div className="sc-li-r">
+                      <button className="sc-li-btn" onClick={() => openShortcutEdit(sc)}>Edit</button>
+                      <button className="sc-li-btn sc-li-del" onClick={() => deleteShortcut(sc.id)}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sc-form">
+                <div className="sc-form-h">{scDraft.id ? 'Edit shortcut' : 'Add shortcut'}</div>
+                <input className="tp-modal-in" placeholder="Name" value={scDraft.name} onChange={e => setScDraft(d => ({ ...d, name: e.target.value }))} />
+                <input className="tp-modal-in" placeholder="URL" value={scDraft.url} onChange={e => setScDraft(d => ({ ...d, url: e.target.value }))} />
+                <input className="tp-modal-in" placeholder="Icon URL (optional)" value={scDraft.icon} onChange={e => setScDraft(d => ({ ...d, icon: e.target.value }))} />
+                <input className="tp-modal-in" placeholder="Color (optional, e.g. #38bdf8)" value={scDraft.color} onChange={e => setScDraft(d => ({ ...d, color: e.target.value }))} />
+                {scErr && <div className="tp-modal-err">{scErr}</div>}
+                <button className="tp-modal-btn" onClick={saveShortcut}>{scDraft.id ? 'Save changes' : 'Add shortcut'}</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
