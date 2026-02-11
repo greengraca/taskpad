@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
-  "notes": "Team task fix, done-to-bottom sorting, exact keyword matching, Ctrl+Z undo, hide-from-inbox",
+  "version": "1.2.0",
+  "notes": "Draggable project tabs, pixel art avatars, done-on-top sorting, button alignment",
   "url": ""
 }

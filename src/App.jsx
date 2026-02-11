@@ -31,6 +31,20 @@ const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const EMPTY = [];
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// ─── Pixel art avatars ───
+const AVATARS = [
+  { id: 0, name: 'Knight', color: '#ef4444', src: '/avatars/0.svg' },
+  { id: 1, name: 'Wizard', color: '#3b82f6', src: '/avatars/1.svg' },
+  { id: 2, name: 'Archer', color: '#22c55e', src: '/avatars/2.svg' },
+  { id: 3, name: 'Mage', color: '#a855f7', src: '/avatars/3.svg' },
+  { id: 4, name: 'Builder', color: '#f97316', src: '/avatars/4.svg' },
+  { id: 5, name: 'Healer', color: '#ec4899', src: '/avatars/5.svg' },
+  { id: 6, name: 'Explorer', color: '#06b6d4', src: '/avatars/6.svg' },
+  { id: 7, name: 'Merchant', color: '#eab308', src: '/avatars/7.svg' },
+  { id: 8, name: 'Farmer', color: '#84cc16', src: '/avatars/8.svg' },
+  { id: 9, name: 'Pirate', color: '#f43f5e', src: '/avatars/9.svg' },
+];
+
 const DEFAULT_DATA = {
   projects: [{ id: 'p1', name: 'Sample', color: '#4ecdc4', keywords: ['sample'] }],
   tasks: [
@@ -105,7 +119,7 @@ function useHDragReorder(items, onReorder) {
   const onPointerDown = useCallback((e, id, forcedX) => {
     if (e?.button && e.button !== 0) return;
     const idx = items.findIndex(it => it.id === id);
-    widthsRef.current = items.map(item => { const el = itemRefs.current[item.id]; return el ? el.getBoundingClientRect().width + 8 : 44; });
+    widthsRef.current = items.map(item => { const el = itemRefs.current[item.id]; return el ? el.getBoundingClientRect().width + 4 : 80; });
     const x = forcedX ?? e?.clientX ?? e?.touches?.[0]?.clientX ?? 0;
     setDragState({ id, startX: x, currentX: x, startIdx: idx }); setOrder(items.map((_, i) => i));
     e?.preventDefault?.(); e?.stopPropagation?.();
@@ -135,7 +149,7 @@ function useHDragReorder(items, onReorder) {
   const getStyle = useCallback((id) => {
     if (!dragState || !order) return {};
     const origIdx = items.findIndex(it => it.id === id); const newIdx = order.indexOf(origIdx); const widths = widthsRef.current;
-    if (id === dragState.id) return { transform: `translateX(${dragState.currentX - dragState.startX}px) scale(1.15)`, zIndex: 100, transition: 'transform 0s', position: 'relative', filter: 'brightness(1.2)' };
+    if (id === dragState.id) return { transform: `translateX(${dragState.currentX - dragState.startX}px) scale(1.08)`, zIndex: 100, transition: 'transform 0s', position: 'relative', filter: 'brightness(1.2)' };
     const origPos = widths.slice(0, origIdx).reduce((a, b) => a + b, 0);
     const newPos = order.slice(0, newIdx).reduce((a, i) => a + widths[i], 0);
     return { transform: `translateX(${newPos - origPos}px)`, transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)', position: 'relative', zIndex: 1 };
@@ -212,7 +226,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
@@ -226,9 +240,18 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
-  const authorNick = isTeam && nicknames && (task.createdByUid || task.createdByEmail)
-    ? (nicknames[task.createdByUid] || task.createdByEmail?.split('@')[0] || null)
-    : null;
+  // Author info with avatar
+  let authorNick = null;
+  let authorAvatar = null;
+  let authorColor = null;
+  if (isTeam && (task.createdByUid || task.createdByEmail)) {
+    authorNick = nicknames?.[task.createdByUid] || task.createdByEmail?.split('@')[0] || null;
+    const avId = avatars?.[task.createdByUid];
+    if (avId !== undefined && avId !== null) {
+      const av = AVATARS[avId];
+      if (av) { authorAvatar = av; authorColor = av.color; }
+    }
+  }
 
   const insertBullet = (e) => {
     if (e.key === 'Enter' && e.shiftKey) {
@@ -260,18 +283,29 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
           <span className="task-text" style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
         {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
-        {authorNick && <span className="task-author">{authorNick}</span>}
+        {authorNick && (
+          <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
+            {authorAvatar && <img src={authorAvatar.src} alt="" className="task-author-av" />}
+            {authorNick}
+          </span>
+        )}
       </div>
-      {canHide && (
-        <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-            <line x1="1" y1="1" x2="23" y2="23"/>
+      <div className="task-actions">
+        {canHide && (
+          <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        )}
+        <button onClick={() => onDelete(task.id)} className="del-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
-      )}
-      <button onClick={() => onDelete(task.id)} className="del-btn">×</button>
+      </div>
     </div>
   );
 }
@@ -326,6 +360,7 @@ export default function App() {
   const [invitesOpen, setInvitesOpen] = useState(false);
   const [nickEditUid, setNickEditUid] = useState(null);
   const [nickEditVal, setNickEditVal] = useState('');
+  const [avatarPickUid, setAvatarPickUid] = useState(null);
 
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
@@ -336,7 +371,6 @@ export default function App() {
   const teamId = activeProj?.teamId;
   const teamProjData = isTeamTab ? teamProjects.find(tp => tp.teamId === teamId) : null;
 
-  // Inbox: tasks that originated from inbox, unless hidden
   const inboxVisible = tasks.filter(t => {
     const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
     return origin === 'inbox' && !t.hiddenFromInbox;
@@ -351,10 +385,10 @@ export default function App() {
     visible = tasks.filter(t => t.projectId === activeTab);
   }
 
-  // Sort: active tasks first, done tasks at bottom
+  // Sort: completed tasks on TOP, active tasks below
   const sortedVisible = [...visible].sort((a, b) => {
     if (a.done === b.done) return 0;
-    return a.done ? 1 : -1;
+    return a.done ? -1 : 1;
   });
 
   const accent = isInbox ? '#38bdf8' : (activeProj?.color || '#38bdf8');
@@ -401,10 +435,12 @@ export default function App() {
   }, [teamId]);
 
   const reorderSc = useCallback((newSc) => up(p => p ? { ...p, scOrder: newSc.map(s => s.id) } : p), [up]);
+  const reorderProjects = useCallback((newProjs) => up(p => p ? { ...p, projects: newProjs } : p), [up]);
 
   const effectiveReorder = isTeamTab ? reorderTeamVisible : reorderVisible;
   const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(sortedVisible, effectiveReorder);
   const { itemRefs: scRefs, onPointerDown: onScDrag, getStyle: getScStyle } = useHDragReorder(orderedSc, reorderSc);
+  const { itemRefs: tabRefs, onPointerDown: onTabDrag, getStyle: getTabStyle, isDragging: isTabDragging } = useHDragReorder(projects, reorderProjects);
 
   // ─── Init sync ───
   useEffect(() => {
@@ -414,7 +450,6 @@ export default function App() {
         base.tasks = base.tasks.map(t => t.origin ? t : { ...t, origin: t.projectId === INBOX_ID ? 'inbox' : 'project' });
       }
       const savedShortcuts = Array.isArray(base.shortcuts) && base.shortcuts.length ? base.shortcuts : DEFAULT_SHORTCUTS;
-      // Migrate icons: if a default shortcut switched to a local SVG, update saved copy
       const defaultIconById = new Map(DEFAULT_SHORTCUTS.map(d => [d.id, d.icon]));
       const migratedShortcuts = savedShortcuts.map(s => {
         const defIcon = defaultIconById.get(s.id);
@@ -431,7 +466,6 @@ export default function App() {
       if (next.activeTab !== INBOX_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
-
     initSync(
       (loaded) => { setData(normalizeLoaded(loaded)); setLoading(false); },
       (status) => { setSynced(status.signedIn); setAuthUser(status.user); },
@@ -441,7 +475,6 @@ export default function App() {
     return cleanup;
   }, []);
 
-  // ─── Subscribe to team tasks ───
   useEffect(() => {
     if (!isTeamTab || !teamId) return;
     const unsub = subscribeTeamTasks(teamId, (tasks) => {
@@ -450,7 +483,6 @@ export default function App() {
     return unsub;
   }, [isTeamTab, teamId]);
 
-  // ─── Check for updates ───
   useEffect(() => {
     checkForUpdates().then(info => {
       if (info?.isUpdateAvailable) setUpdateInfo(info);
@@ -477,7 +509,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [up]);
 
-  // ─── Auth ───
   const runAuth = async () => {
     setAuthBusy(true); setAuthErr('');
     try {
@@ -500,16 +531,14 @@ export default function App() {
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
   // ─── Task operations ───
-
-  // Exact word match, case insensitive. "top4" won't match "top" and vice versa.
   const detectProject = (text) => {
     const low = text.toLowerCase();
     for (const p of projects) {
       if (p.isTeam) continue;
-      const nameRe = new RegExp('\\b' + escRe(p.name.toLowerCase()) + '\\b', 'i');
+      const nameRe = new RegExp('(?:^|\\W)' + escRe(p.name.toLowerCase()) + '(?:$|\\W)', 'i');
       if (nameRe.test(low)) return p.id;
       if (p.keywords?.some(k => {
-        const kwRe = new RegExp('\\b' + escRe(k.toLowerCase()) + '\\b', 'i');
+        const kwRe = new RegExp('(?:^|\\W)' + escRe(k.toLowerCase()) + '(?:$|\\W)', 'i');
         return kwRe.test(low);
       })) return p.id;
     }
@@ -520,13 +549,11 @@ export default function App() {
     if (isTeamTab && teamId) {
       const vis = teamTasksMap[teamId] || [];
       const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
-      // Create task directly in Firestore, track ID for auto-focus
       createTeamTask({ teamId, text: '', afterOrder }).then(docId => {
         newTeamTaskIds.current.add(docId);
       }).catch(e => console.warn('Team task create failed:', e));
       return;
     }
-
     const origin = isInbox ? 'inbox' : 'project';
     const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, origin, ts: Date.now(), _new: true };
     up(prev => {
@@ -553,7 +580,6 @@ export default function App() {
       const existing = prev.tasks.find(t => t.id === id);
       let pid = existing?.projectId;
       const origin = existing?.origin || 'inbox';
-      // Only auto-detect project from inbox, never move tasks created on a project tab
       if (origin === 'inbox') { const d = detectProject(text); if (d) pid = d; else pid = INBOX_ID; }
       return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, origin, _new: false } : t) };
     });
@@ -642,15 +668,17 @@ export default function App() {
     catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
   };
 
-  const handleAcceptInvite = async (inviteId) => {
-    setTeamBusy(true);
-    try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); }
-  };
+  const handleAcceptInvite = async (inviteId) => { setTeamBusy(true); try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); } };
   const handleDeclineInvite = async (inviteId) => { try { await declineTeamInvite({ inviteId }); } catch (e) { console.warn(e); } };
 
   const saveNickname = async (tid, uid, nick) => {
     try { await updateTeamProject({ teamId: tid, patch: { [`nicknames.${uid}`]: nick.trim() || uid } }); } catch (e) { console.warn(e); }
     setNickEditUid(null);
+  };
+
+  const setAvatar = async (tid, uid, avatarId) => {
+    try { await updateTeamProject({ teamId: tid, patch: { [`avatars.${uid}`]: avatarId } }); } catch (e) { console.warn(e); }
+    setAvatarPickUid(null);
   };
 
   const done = sortedVisible.filter(t => t.done).length, total = sortedVisible.length;
@@ -706,6 +734,7 @@ export default function App() {
         <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}>{data.showSc ? '◫' : '◻'}</button>
       </header>
 
+      {/* Auth modal */}
       {isFirebaseConfigured() && authOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => !authBusy && setAuthOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -737,6 +766,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Invites modal */}
       {invitesOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => setInvitesOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -763,23 +793,25 @@ export default function App() {
         </div>
       )}
 
+      {/* ─── Nav with draggable tabs ─── */}
       <nav className="tp-nav"><div className="tp-nav-scroll">
         <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => up(p => ({ ...p, activeTab: INBOX_ID }))} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <span className="tp-td" style={{ background: '#38bdf8' }} />Inbox
           {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
         </button>
         {projects.map(pr => (
-          <div key={pr.id}>
+          <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
             {editingTab === pr.id ? (
               <input ref={editTabRef} className="tp-t tp-t-edit" value={editTabName} onChange={e => setEditTabName(e.target.value)} onBlur={finishEditTab}
                 onKeyDown={e => { if (e.key === 'Enter') finishEditTab(); if (e.key === 'Escape') setEditingTab(null); }}
                 style={{ borderBottomColor: pr.color, width: Math.max(70, editTabName.length * 9) }} />
             ) : (
               <button className={`tp-t ${activeTab === pr.id ? 'tp-t-on' : ''}`}
-                onClick={() => up(p => ({ ...p, activeTab: pr.id }))}
+                onClick={() => { if (!isTabDragging) up(p => ({ ...p, activeTab: pr.id })); }}
+                onMouseDown={e => { if (e.button === 0) onTabDrag(e, pr.id); }}
                 onDoubleClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); }}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pid: pr.id }); setTeamErr(''); }}
-                style={{ borderBottomColor: activeTab === pr.id ? pr.color : 'transparent', background: activeTab === pr.id ? pr.color + '0a' : 'transparent' }}>
+                style={{ borderBottomColor: activeTab === pr.id ? pr.color : 'transparent', background: activeTab === pr.id ? pr.color + '0a' : 'transparent', cursor: 'grab' }}>
                 <span className="tp-td" style={{ background: pr.color }} />
                 {pr.name}
                 {pr.isTeam && <span className="team-badge">👥</span>}
@@ -796,6 +828,7 @@ export default function App() {
         <button className="tp-t-add" onClick={addProject}>+</button>
       </div></nav>
 
+      {/* Context menu */}
       {contextMenu && (() => {
         const pr = projects.find(p => p.id === contextMenu.pid); if (!pr) return null;
         const tp = pr.isTeam ? teamProjects.find(t => t.teamId === pr.teamId) : null;
@@ -825,18 +858,36 @@ export default function App() {
                   {(tp.memberEmails || []).map((email, i) => {
                     const uid = (tp.memberUids || [])[i];
                     const nick = tp.nicknames?.[uid] || email.split('@')[0];
+                    const avId = tp.avatars?.[uid];
+                    const av = avId !== undefined ? AVATARS[avId] : null;
                     return (
                       <div key={email} className="team-member">
-                        {nickEditUid === uid ? (
-                          <input className="kw-in" autoFocus value={nickEditVal} onChange={e => setNickEditVal(e.target.value)}
-                            onBlur={() => saveNickname(pr.teamId, uid, nickEditVal)}
-                            onKeyDown={e => { if (e.key === 'Enter') saveNickname(pr.teamId, uid, nickEditVal); if (e.key === 'Escape') setNickEditUid(null); }} />
-                        ) : (
-                          <span className="team-member-info" onClick={() => { setNickEditUid(uid); setNickEditVal(nick); }}>
-                            <span className="team-nick">{nick}</span>
-                            <span className="team-email">{email}</span>
-                          </span>
-                        )}
+                        <div className="team-member-av" onClick={() => setAvatarPickUid(avatarPickUid === uid ? null : uid)}>
+                          {av ? <img src={av.src} alt="" className="av-img" style={{ borderColor: av.color }} /> : <span className="av-empty">?</span>}
+                        </div>
+                        <div className="team-member-main">
+                          {nickEditUid === uid ? (
+                            <input className="kw-in" autoFocus value={nickEditVal} onChange={e => setNickEditVal(e.target.value)}
+                              onBlur={() => saveNickname(pr.teamId, uid, nickEditVal)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveNickname(pr.teamId, uid, nickEditVal); if (e.key === 'Escape') setNickEditUid(null); }} />
+                          ) : (
+                            <span className="team-member-info" onClick={() => { setNickEditUid(uid); setNickEditVal(nick); }}>
+                              <span className="team-nick">{nick}</span>
+                              <span className="team-email">{email}</span>
+                            </span>
+                          )}
+                          {avatarPickUid === uid && (
+                            <div className="av-picker">
+                              {AVATARS.map(a => (
+                                <button key={a.id} className={`av-opt ${avId === a.id ? 'av-opt-on' : ''}`} title={a.name}
+                                  style={{ borderColor: avId === a.id ? a.color : 'transparent' }}
+                                  onClick={() => setAvatar(pr.teamId, uid, a.id)}>
+                                  <img src={a.src} alt={a.name} width="20" height="25" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -866,14 +917,13 @@ export default function App() {
           {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(-1)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(-1)} color={accent} />}
           {sortedVisible.map((task, idx) => {
-            // Check if this is a newly created team task that needs auto-focus
             const isNewTeam = newTeamTaskIds.current.has(task.id);
             if (isNewTeam) newTeamTaskIds.current.delete(task.id);
             const taskObj = isNewTeam ? { ...task, _new: true } : task;
             return (
               <div key={task.id}>
                 <TaskLine task={taskObj} allProjects={projects} accentColor={accent} isInbox={isInbox}
-                  isTeam={isTeamTab} nicknames={teamProjData?.nicknames}
+                  isTeam={isTeamTab} nicknames={teamProjData?.nicknames} avatars={teamProjData?.avatars}
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
