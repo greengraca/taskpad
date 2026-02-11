@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "TaskPad",
-    "version": "1.2.7"
+    "version": "1.2.8"
   },
   "tauri": {
     "allowlist": {
@@ -37,7 +37,7 @@
         "resizable": true,
         "title": "TaskPad",
         "url": "https://taskpad-phi.vercel.app",
-        "width": 740,
+        "width": 780,
         "height": 780,
         "minWidth": 480,
         "minHeight": 500,

@@ -282,12 +282,16 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         ) : (
           <span className="task-text" style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
-        {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
-        {authorNick && (
-          <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
-            {authorAvatar && <img src={authorAvatar.src} alt="" className="task-author-av" />}
-            {authorNick}
-          </span>
+        {(projLabel || authorNick) && (
+          <div className="task-badges">
+            {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
+            {authorNick && (
+              <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
+                {authorAvatar && <img src={authorAvatar.src} alt="" className="task-author-av" />}
+                {authorNick}
+              </span>
+            )}
+          </div>
         )}
       </div>
       <div className="task-actions">
@@ -752,7 +756,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.7</span>
+          <span className="tp-ver">v1.2.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
