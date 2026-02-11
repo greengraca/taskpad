@@ -156,8 +156,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .ins-plus { font-size: 11px; font-weight: 700; background: var(--bg); padding: 0 4px; border: 1px solid; border-radius: 3px; line-height: 1.2; font-family: var(--fm); }
 
 /* ─── Shortcuts bar ─── */
-.sc-bar { border-top: 1px solid var(--b); padding: 10px 16px; flex-shrink: 0; background: #0a0a0a; }
-.sc-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; align-items: center; padding: 2px 0; }
+.sc-bar { border-top: 1px solid var(--b); padding: 10px 16px; flex-shrink: 0; background: #0a0a0a; overflow: hidden; }
+.sc-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; align-items: center; padding: 2px 0; -webkit-overflow-scrolling: touch; }
 .sc-row::-webkit-scrollbar { display: none; }
 .sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: none; }
 .sc-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px solid var(--bl); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color .15s, background .15s; }

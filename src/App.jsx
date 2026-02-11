@@ -208,7 +208,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
       onMouseDown={startHold} onMouseMove={trackPos} onMouseUp={cancelHold} onMouseLeave={!unlocked ? cancelHold : undefined}
       onTouchStart={startHold} onTouchMove={trackPos} onTouchEnd={cancelHold}>
       {(showRing || unlocked) && (
-        <svg width="36" height="36" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 2 }}>
+        <svg viewBox="0 0 36 36" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }}>
           <circle cx="18" cy="18" r="15" fill="none" stroke={unlocked ? shortcut.color : '#555'} strokeWidth="2"
             strokeDasharray={circ} strokeDashoffset={unlocked ? 0 : circ * (1 - holdProgress)}
             strokeLinecap="round" style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
@@ -726,7 +726,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.3</span>
+          <span className="tp-ver">v1.2.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>

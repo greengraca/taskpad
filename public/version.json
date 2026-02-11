@@ -1,5 +1,5 @@
 {
-  "version": "1.2.3",
-  "notes": "Avatar alignment, update URL fix",
+  "version": "1.2.4",
+  "notes": "Scrollable shortcuts, mobile ring fix, wider Tauri window",
   "url": ""
 }

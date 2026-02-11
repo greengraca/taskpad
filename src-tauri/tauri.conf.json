@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "TaskPad",
-    "version": "1.2.3"
+    "version": "1.2.4"
   },
   "tauri": {
     "allowlist": {
@@ -36,9 +36,9 @@
         "fullscreen": false,
         "resizable": true,
         "title": "TaskPad",
-        "width": 520,
+        "width": 740,
         "height": 780,
-        "minWidth": 380,
+        "minWidth": 480,
         "minHeight": 500,
         "decorations": true,
         "transparent": false,
