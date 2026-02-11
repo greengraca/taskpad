@@ -316,9 +316,9 @@ export const genTeamTaskId = (teamId) => {
   return doc(collection(db, 'projects', teamId, 'tasks')).id;
 };
 
-export const createTeamTask = async ({ teamId, text, afterOrder, taskId }) => {
+export const createTeamTask = async ({ teamId, text, order: orderArg, afterOrder, taskId }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in to add team tasks');
-  const order = typeof afterOrder === 'number' ? afterOrder + 1 : Date.now();
+  const order = typeof orderArg === 'number' ? orderArg : (typeof afterOrder === 'number' ? afterOrder + 1 : Date.now());
 
   const ref = taskId
     ? doc(db, 'projects', teamId, 'tasks', taskId)

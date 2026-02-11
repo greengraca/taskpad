@@ -238,15 +238,16 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
-  const [editMinHeight, setEditMinHeight] = useState(0);
+  const minHRef = useRef(0);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, editMinHeight)}px`;
-  }, [editing, text, editMinHeight]);
-  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); setEditMinHeight(0); };
+    el.style.height = '0px';
+    el.style.height = `${Math.max(el.scrollHeight, minHRef.current)}px`;
+  }, [editing, text]);
+  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); minHRef.current = 0; };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
   // Author info with avatar
@@ -279,7 +280,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const startEditing = () => {
     if (editing) return;
     if (textRef.current) {
-      setEditMinHeight(textRef.current.offsetHeight);
+      minHRef.current = textRef.current.offsetHeight;
     }
     setEditing(true);
   };
@@ -294,7 +295,9 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
       </button>
       <div className="task-body" onClick={startEditing}>
         {editing ? (
-          <textarea ref={inputRef} className="task-input" rows={1} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
+          <textarea ref={inputRef} className="task-input" rows={1} value={text}
+            style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
+            onChange={e => setText(e.target.value)} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
@@ -591,23 +594,27 @@ export default function App() {
 
   const insertTask = (afterTaskId) => {
     if (isTeamTab && teamId) {
-      const vis = teamTasksMap[teamId] || [];
-      const afterIdx = afterTaskId ? vis.findIndex(t => t.id === afterTaskId) : -1;
-      const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
+      // Use sortedVisible for correct order calculation
+      const sorted = sortedVisible;
+      const afterIdx = afterTaskId ? sorted.findIndex(t => t.id === afterTaskId) : -1;
+      const afterOrder = afterIdx >= 0 ? (sorted[afterIdx].order ?? afterIdx) : -1;
+      const nextTask = afterIdx >= 0 && afterIdx + 1 < sorted.length ? sorted[afterIdx + 1] : null;
+      const nextOrder = nextTask ? (nextTask.order ?? afterOrder + 2) : afterOrder + 2;
+      const newOrder = afterOrder + (nextOrder - afterOrder) / 2;
       const preId = genTeamTaskId(teamId);
       if (preId) {
         newTeamTaskIds.current.add(preId);
-        const optimistic = { id: preId, text: '', done: false, deleted: false, order: afterOrder + 1, _new: true, _optimistic: true,
+        const optimistic = { id: preId, text: '', done: false, deleted: false, order: newOrder, _new: true, _optimistic: true,
           createdByUid: authUser?.uid, createdByEmail: authUser?.email, ts: { seconds: Date.now() / 1000 } };
         setTeamTasksMap(prev => {
           const existing = prev[teamId] || [];
-          const insertAt = afterIdx >= 0 ? afterIdx + 1 : 0;
+          const insertAt = afterTaskId ? existing.findIndex(t => t.id === afterTaskId) + 1 : 0;
           const next = [...existing];
-          next.splice(insertAt, 0, optimistic);
+          next.splice(Math.max(0, insertAt), 0, optimistic);
           return { ...prev, [teamId]: next };
         });
       }
-      createTeamTask({ teamId, text: '', afterOrder, taskId: preId }).catch(e => console.warn('Team task create failed:', e));
+      createTeamTask({ teamId, text: '', order: newOrder, taskId: preId }).catch(e => console.warn('Team task create failed:', e));
       return;
     }
     const origin = isInbox ? 'inbox' : 'project';
@@ -615,14 +622,14 @@ export default function App() {
     up(prev => {
       const all = [...prev.tasks];
       if (!afterTaskId) {
-        // Insert at top
+        // Insert at very beginning of this view's tasks
         const vis = isInbox
           ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
           : all.filter(t => t.projectId === prev.activeTab);
         const first = vis[0];
         all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
       } else {
-        // Insert after the specified task
+        // Insert after the specified task in master array
         const refIdx = all.findIndex(t => t.id === afterTaskId);
         all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
       }
@@ -804,7 +811,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.3</span>
+          <span className="tp-ver">v1.3.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
