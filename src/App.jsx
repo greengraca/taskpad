@@ -472,7 +472,7 @@ export default function App() {
       return next;
     };
     initSync(
-      (loaded) => { setData(normalizeLoaded(loaded)); setLoading(false); },
+      (loaded) => { setData(prev => { const norm = normalizeLoaded(loaded); if (prev) norm.activeTab = prev.activeTab; return norm; }); setLoading(false); },
       (status) => { setSynced(status.signedIn); setAuthUser(status.user); },
       (inv) => setInvites(inv || []),
       (tp) => setTeamProjects(tp || [])
@@ -756,7 +756,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.8</span>
+          <span className="tp-ver">v1.2.9</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
