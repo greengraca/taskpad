@@ -1,5 +1,5 @@
 {
-  "version": "1.2.5",
-  "notes": "Team task auto-focus fix, update download button",
+  "version": "1.2.6",
+  "notes": "Tauri now loads from deployed URL — always up-to-date",
   "url": ""
 }
