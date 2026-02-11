@@ -120,7 +120,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .task-row:hover { background: var(--sh); }
 .task-row:hover .task-actions .del-btn { color: #444; }
 .task-row:hover .task-actions .hide-btn { color: #444; }
-.task-done { opacity: .4; }
+.task-done { opacity: .45; transition: opacity .15s; }
+.task-done:hover { opacity: .75; }
 
 .drag-grip { color: #333; font-size: 12px; cursor: grab; padding: 2px 4px; border-radius: 4px; line-height: 1; letter-spacing: -2px; user-select: none; flex-shrink: 0; touch-action: none; }
 .drag-grip:hover { color: #666; background: #1a1a1a; }
@@ -131,7 +132,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .chk { font-size: 11px; color: #000; font-weight: 700; }
 .task-body { flex: 1; display: flex; align-items: flex-start; gap: 8px; min-height: 24px; cursor: text; flex-wrap: wrap; padding-top: 1px; }
 .task-text { font-size: 13px; font-family: var(--fm); font-weight: 400; line-height: 1.4; word-break: break-word; color: var(--t); }
-.task-done .task-text { text-decoration: line-through; color: #555; }
+.task-done .task-text { text-decoration: line-through; color: #777; }
 .task-input { flex: 1; min-width: 100px; width: 100%; background: transparent; border: none; border-bottom: 1px solid #333; padding: 2px 0; color: var(--t); font-family: var(--fm); font-size: 13px; outline: none; resize: none; overflow: hidden; line-height: 1.4; }
 .task-tag { font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
 

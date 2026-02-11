@@ -1,5 +1,5 @@
 {
-  "version": "1.2.6",
-  "notes": "Tauri now loads from deployed URL — always up-to-date",
+  "version": "1.2.7",
+  "notes": "Insert fix, inbox default, done task readability, matched tasks at bottom",
   "url": ""
 }

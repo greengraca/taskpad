@@ -463,7 +463,7 @@ export default function App() {
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
       const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
-      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: base.activeTab || INBOX_ID };
+      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID };
       if (next.activeTab !== INBOX_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
@@ -555,14 +555,14 @@ export default function App() {
     return null;
   };
 
-  const insertTask = (afterIdx) => {
+  const insertTask = (afterTaskId) => {
     if (isTeamTab && teamId) {
       const vis = teamTasksMap[teamId] || [];
+      const afterIdx = afterTaskId ? vis.findIndex(t => t.id === afterTaskId) : -1;
       const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
       const preId = genTeamTaskId(teamId);
       if (preId) {
         newTeamTaskIds.current.add(preId);
-        // Optimistically add to local state for instant focus
         const optimistic = { id: preId, text: '', done: false, deleted: false, order: afterOrder + 1, _new: true, _optimistic: true,
           createdByUid: authUser?.uid, createdByEmail: authUser?.email, ts: { seconds: Date.now() / 1000 } };
         setTeamTasksMap(prev => {
@@ -580,11 +580,18 @@ export default function App() {
     const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, origin, ts: Date.now(), _new: true };
     up(prev => {
       const all = [...prev.tasks];
-      const vis = isInbox
-        ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
-        : all.filter(t => t.projectId === prev.activeTab);
-      if (afterIdx < 0) { const first = vis[0]; all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt); }
-      else { const ref = vis[afterIdx]; all.splice(ref ? all.indexOf(ref) + 1 : all.length, 0, nt); }
+      if (!afterTaskId) {
+        // Insert at top
+        const vis = isInbox
+          ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
+          : all.filter(t => t.projectId === prev.activeTab);
+        const first = vis[0];
+        all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
+      } else {
+        // Insert after the specified task
+        const refIdx = all.findIndex(t => t.id === afterTaskId);
+        all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
+      }
       return { ...prev, tasks: all };
     });
   };
@@ -604,7 +611,13 @@ export default function App() {
       let pid = existing?.projectId;
       const origin = existing?.origin || 'inbox';
       if (origin === 'inbox') { const d = detectProject(text); if (d) pid = d; else pid = INBOX_ID; }
-      return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, origin, _new: false } : t) };
+      const updated = { ...existing, text, projectId: pid, origin, _new: false };
+      // If task was newly matched to a project, move it to end so it appears at bottom of that project
+      if (pid !== INBOX_ID && pid !== existing?.projectId) {
+        const without = prev.tasks.filter(t => t.id !== id);
+        return { ...prev, tasks: [...without, updated] };
+      }
+      return { ...prev, tasks: prev.tasks.map(t => t.id === id ? updated : t) };
     });
   };
 
@@ -739,7 +752,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.6</span>
+          <span className="tp-ver">v1.2.7</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -939,8 +952,8 @@ export default function App() {
           </div>
         )}
         <div className="tp-tasks" ref={containerRef}>
-          {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(-1)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
-          {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(-1)} color={accent} />}
+          {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
+          {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}
           {sortedVisible.map((task, idx) => {
             const isNewTeam = newTeamTaskIds.current.has(task.id);
             const taskObj = isNewTeam ? { ...task, _new: true } : task;
@@ -952,7 +965,7 @@ export default function App() {
                   onHide={isInbox ? hideFromInbox : null}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
                   refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
-                {!isTaskDragging && <InsertZone onClick={() => insertTask(idx)} color={accent} />}
+                {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} />}
               </div>
             );
           })}
