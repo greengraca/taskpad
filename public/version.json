@@ -1,5 +1,5 @@
 {
-  "version": "1.2.9",
-  "notes": "Fix tab reset on sync",
+  "version": "1.2.10",
+  "notes": "Badges center-right, textarea preserves height on edit",
   "url": ""
 }

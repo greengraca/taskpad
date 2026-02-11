@@ -230,12 +230,20 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
+  const textRef = useRef(null);
+  const initHeightRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    el.style.height = '0px'; el.style.height = `${el.scrollHeight}px`;
+    // Use measured height from text span, or compute from content
+    if (initHeightRef.current) {
+      el.style.height = Math.max(initHeightRef.current, el.scrollHeight) + 'px';
+      initHeightRef.current = null;
+    } else {
+      el.style.height = '0px'; el.style.height = `${el.scrollHeight}px`;
+    }
   }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -267,6 +275,15 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
 
   const canHide = isInbox && task.projectId !== INBOX_ID && onHide;
 
+  const startEditing = () => {
+    if (editing) return;
+    // Measure current text height before switching to textarea
+    if (textRef.current) {
+      initHeightRef.current = textRef.current.offsetHeight;
+    }
+    setEditing(true);
+  };
+
   return (
     <div className={`task-row ${task.done ? 'task-done' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
       <div className="drag-grip" onMouseDown={dragHandle} onTouchStart={dragHandle}>⠿</div>
@@ -275,25 +292,25 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
           {task.done && <span className="chk">✓</span>}
         </div>
       </button>
-      <div className="task-body" onClick={() => !editing && setEditing(true)}>
+      <div className="task-body" onClick={startEditing}>
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text} onChange={e => setText(e.target.value)} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
-          <span className="task-text" style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
-        )}
-        {(projLabel || authorNick) && (
-          <div className="task-badges">
-            {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
-            {authorNick && (
-              <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
-                {authorAvatar && <img src={authorAvatar.src} alt="" className="task-author-av" />}
-                {authorNick}
-              </span>
-            )}
-          </div>
+          <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
       </div>
+      {(projLabel || authorNick) && (
+        <div className="task-badges">
+          {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
+          {authorNick && (
+            <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
+              {authorAvatar && <img src={authorAvatar.src} alt="" className="task-author-av" />}
+              {authorNick}
+            </span>
+          )}
+        </div>
+      )}
       <div className="task-actions">
         {canHide && (
           <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
@@ -756,7 +773,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.9</span>
+          <span className="tp-ver">v1.2.10</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>

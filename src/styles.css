@@ -130,10 +130,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .checkbox { background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0; }
 .cb-inner { width: 18px; height: 18px; border-radius: 4px; border: 2px solid; display: flex; align-items: center; justify-content: center; transition: all .15s; }
 .chk { font-size: 11px; color: #000; font-weight: 700; }
-.task-body { flex: 1; display: flex; flex-direction: column; gap: 4px; min-height: 24px; cursor: text; padding-top: 1px; }
+.task-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-height: 24px; cursor: text; padding-top: 1px; min-width: 0; }
 .task-text { font-size: 13px; font-family: var(--fm); font-weight: 400; line-height: 1.4; word-break: break-word; color: var(--t); }
 .task-done .task-text { text-decoration: line-through; color: #777; }
-.task-badges { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.task-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; align-self: center; flex-shrink: 0; }
 .task-input { flex: 1; min-width: 100px; width: 100%; background: transparent; border: none; border-bottom: 1px solid #333; padding: 2px 0; color: var(--t); font-family: var(--fm); font-size: 13px; outline: none; resize: none; overflow: hidden; line-height: 1.4; }
 .task-tag { font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
 
