@@ -414,8 +414,15 @@ export default function App() {
         base.tasks = base.tasks.map(t => t.origin ? t : { ...t, origin: t.projectId === INBOX_ID ? 'inbox' : 'project' });
       }
       const savedShortcuts = Array.isArray(base.shortcuts) && base.shortcuts.length ? base.shortcuts : DEFAULT_SHORTCUTS;
-      const byId = new Map(savedShortcuts.map(s => [s.id, s]));
-      const merged = [...savedShortcuts];
+      // Migrate icons: if a default shortcut switched to a local SVG, update saved copy
+      const defaultIconById = new Map(DEFAULT_SHORTCUTS.map(d => [d.id, d.icon]));
+      const migratedShortcuts = savedShortcuts.map(s => {
+        const defIcon = defaultIconById.get(s.id);
+        if (defIcon && defIcon.startsWith('/shortcuts/') && s.icon !== defIcon) return { ...s, icon: defIcon };
+        return s;
+      });
+      const byId = new Map(migratedShortcuts.map(s => [s.id, s]));
+      const merged = [...migratedShortcuts];
       for (const d of DEFAULT_SHORTCUTS) { if (!byId.has(d.id)) { merged.push(d); byId.set(d.id, d); } }
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
