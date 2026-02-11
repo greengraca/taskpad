@@ -1,5 +1,5 @@
 {
-  "version": "1.2.10",
-  "notes": "Badges center-right, textarea preserves height on edit",
+  "version": "1.3.0",
+  "notes": "Mobile shortcut scroll, invite feedback, textarea height fix, badges right",
   "url": ""
 }

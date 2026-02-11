@@ -91,6 +91,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .team-nick { font-size: 12px; font-family: var(--fm); color: #888; }
 .team-email { font-size: 9px; font-family: var(--fm); color: #444; }
 .team-invite { padding: 6px 12px; }
+.invite-toast { font-size: 11px; font-family: var(--fm); padding: 4px 8px; margin-top: 4px; border: 1px solid; border-radius: 6px; background: #111; }
 
 /* ─── Avatar picker ─── */
 .av-picker { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; padding: 4px; background: #111; border: 1px solid #252525; border-radius: 6px; }
@@ -118,8 +119,6 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 /* ─── Tasks ─── */
 .task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; will-change: transform; }
 .task-row:hover { background: var(--sh); }
-.task-row:hover .task-actions .del-btn { color: #444; }
-.task-row:hover .task-actions .hide-btn { color: #444; }
 .task-done { opacity: .45; transition: opacity .15s; }
 .task-done:hover { opacity: .75; }
 
@@ -143,12 +142,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 
 /* ─── Task action buttons (vertically centered) ─── */
 .task-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; align-self: center; }
-
-.hide-btn { background: none; border: none; color: transparent; cursor: pointer; padding: 4px; line-height: 0; border-radius: 4px; transition: color .15s; display: flex; align-items: center; justify-content: center; }
+.hide-btn, .del-btn { display: none; background: none; border: none; color: #444; cursor: pointer; padding: 4px; line-height: 0; border-radius: 4px; transition: color .15s; align-items: center; justify-content: center; }
+.task-row:hover .hide-btn, .task-row:hover .del-btn { display: flex; }
 .hide-btn:hover { color: #888 !important; }
 .hide-btn svg { display: block; }
-
-.del-btn { background: none; border: none; color: transparent; cursor: pointer; padding: 4px; line-height: 0; border-radius: 4px; transition: color .15s; display: flex; align-items: center; justify-content: center; }
 .del-btn:hover { color: #ff4444 !important; }
 .del-btn svg { display: block; }
 
@@ -164,7 +161,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-row::-webkit-scrollbar-track { background: transparent; }
 .sc-row::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 .sc-row::-webkit-scrollbar-thumb:hover { background: #555; }
-.sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: none; }
+.sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: pan-x pan-y; }
 .sc-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px solid var(--bl); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color .15s, background .15s; }
 .sc-icon:hover { background: #1a1a1a; border-color: #333; }
 .sc-icon img { border-radius: 3px; pointer-events: none; }

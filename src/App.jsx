@@ -170,6 +170,12 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
   const trackPos = (e) => {
     const x = e?.clientX ?? e?.touches?.[0]?.clientX ?? 0;
     const y = e?.clientY ?? e?.touches?.[0]?.clientY ?? 0;
+    // Cancel hold if finger moved significantly (user is scrolling)
+    if (isDownRef.current && !unlocked && lastPosRef.current.x) {
+      const dx = Math.abs(x - lastPosRef.current.x);
+      const dy = Math.abs(y - lastPosRef.current.y);
+      if (dx > 8 || dy > 8) cancelHold();
+    }
     lastPosRef.current = { x, y };
   };
 
@@ -204,7 +210,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
   const circ = 2 * Math.PI * 15;
 
   return (
-    <div className="sc-wrap" ref={refCb} style={style}
+    <div className="sc-wrap" ref={refCb} style={{ ...style, ...(unlocked ? { touchAction: 'none' } : {}) }}
       onMouseDown={startHold} onMouseMove={trackPos} onMouseUp={cancelHold} onMouseLeave={!unlocked ? cancelHold : undefined}
       onTouchStart={startHold} onTouchMove={trackPos} onTouchEnd={cancelHold}>
       {(showRing || unlocked) && (
@@ -231,21 +237,15 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
-  const initHeightRef = useRef(null);
+  const [editMinHeight, setEditMinHeight] = useState(0);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Use measured height from text span, or compute from content
-    if (initHeightRef.current) {
-      el.style.height = Math.max(initHeightRef.current, el.scrollHeight) + 'px';
-      initHeightRef.current = null;
-    } else {
-      el.style.height = '0px'; el.style.height = `${el.scrollHeight}px`;
-    }
-  }, [editing, text]);
-  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
+    el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, editMinHeight)}px`;
+  }, [editing, text, editMinHeight]);
+  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); setEditMinHeight(0); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
   // Author info with avatar
@@ -277,9 +277,8 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
 
   const startEditing = () => {
     if (editing) return;
-    // Measure current text height before switching to textarea
     if (textRef.current) {
-      initHeightRef.current = textRef.current.offsetHeight;
+      setEditMinHeight(textRef.current.offsetHeight);
     }
     setEditing(true);
   };
@@ -376,6 +375,7 @@ export default function App() {
   const [teamProjects, setTeamProjects] = useState([]);
   const [teamTasksMap, setTeamTasksMap] = useState({});
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteResult, setInviteResult] = useState(null);
   const [teamBusy, setTeamBusy] = useState(false);
   const [teamErr, setTeamErr] = useState('');
   const [invitesOpen, setInvitesOpen] = useState(false);
@@ -720,9 +720,16 @@ export default function App() {
 
   const sendInvite = async (tid) => {
     if (!inviteEmail.trim()) return;
-    setTeamBusy(true); setTeamErr('');
-    try { await sendTeamInvite({ teamId: tid, toEmail: inviteEmail.trim() }); setInviteEmail(''); }
-    catch (e) { setTeamErr(e?.message || String(e)); } finally { setTeamBusy(false); }
+    setTeamBusy(true); setTeamErr(''); setInviteResult(null);
+    try {
+      await sendTeamInvite({ teamId: tid, toEmail: inviteEmail.trim() });
+      setInviteResult({ ok: true, msg: `Invite sent to ${inviteEmail.trim()}` });
+      setInviteEmail('');
+    } catch (e) {
+      const msg = e?.message || String(e);
+      setInviteResult({ ok: false, msg });
+      setTeamErr(msg);
+    } finally { setTeamBusy(false); setTimeout(() => setInviteResult(null), 3000); }
   };
 
   const handleAcceptInvite = async (inviteId) => { setTeamBusy(true); try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); } };
@@ -773,7 +780,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.10</span>
+          <span className="tp-ver">v1.3.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -955,6 +962,11 @@ export default function App() {
                   <input className="kw-in" placeholder="Invite by email + Enter" value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') sendInvite(pr.teamId); }} />
+                  {inviteResult && (
+                    <div className="invite-toast" style={{ color: inviteResult.ok ? '#22c55e' : '#ef4444', borderColor: inviteResult.ok ? '#22c55e44' : '#ef444444' }}>
+                      {inviteResult.ok ? '✓' : '✕'} {inviteResult.msg}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
