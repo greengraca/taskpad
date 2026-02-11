@@ -13,6 +13,7 @@ import {
   arrayUnion,
   orderBy,
   writeBatch,
+  enableNetwork,
 } from 'firebase/firestore';
 
 const LOCAL_KEY = 'taskpad-data';
@@ -358,4 +359,10 @@ export const reorderTeamTasks = async ({ teamId, orderedTasks }) => {
 export const updateTeamProject = async ({ teamId, patch }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
   await updateDoc(doc(db, 'projects', teamId), { ...patch, updatedAt: serverTimestamp() });
+};
+
+// Force Firestore to reconnect (useful when PWA resumes from background)
+export const reconnectFirestore = () => {
+  if (!isFirebaseConfigured() || !db) return;
+  enableNetwork(db).catch(() => {});
 };

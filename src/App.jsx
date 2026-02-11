@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
-  subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
+  subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject,
+  reconnectFirestore
 } from './sync';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
 import { checkForUpdates } from './updater';
@@ -497,13 +498,25 @@ export default function App() {
     return cleanup;
   }, []);
 
+  // Reconnect Firestore when PWA comes back from background
   useEffect(() => {
-    if (!isTeamTab || !teamId) return;
-    const unsub = subscribeTeamTasks(teamId, (tasks) => {
-      setTeamTasksMap(prev => ({ ...prev, [teamId]: tasks }));
-    });
-    return unsub;
-  }, [isTeamTab, teamId]);
+    const onVisible = () => { if (document.visibilityState === 'visible') reconnectFirestore(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  // Subscribe to team tasks for ALL team projects (real-time across tabs)
+  const teamIdsList = projects.filter(p => p.isTeam && p.teamId).map(p => p.teamId);
+  const teamIdsKey = teamIdsList.join(',');
+  useEffect(() => {
+    if (teamIdsList.length === 0) return;
+    const unsubs = teamIdsList.map(tid =>
+      subscribeTeamTasks(tid, (tasks) => {
+        setTeamTasksMap(prev => ({ ...prev, [tid]: tasks }));
+      })
+    );
+    return () => unsubs.forEach(u => u());
+  }, [teamIdsKey]);
 
   // Subscribe directly to the team project doc for nicknames/avatars
   useEffect(() => {
@@ -791,7 +804,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.1</span>
+          <span className="tp-ver">v1.3.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>

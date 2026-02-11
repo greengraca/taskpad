@@ -1,5 +1,5 @@
 {
-  "version": "1.3.1",
-  "notes": "Fix invite accept, show project name in invites",
+  "version": "1.3.2",
+  "notes": "Real-time team sync on PWA, Firestore persistence",
   "url": ""
 }
