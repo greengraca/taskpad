@@ -33,6 +33,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 10px; border-bottom: 1px solid var(--b); flex-shrink: 0; }
 .tp-hdr-l { display: flex; align-items: center; gap: 10px; }
 .tp-name { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; color: #e8e8e8; }
+.tp-ver { font-size: 10px; font-family: var(--fm); color: #333; font-weight: 400; }
 .sync-dot { font-size: 12px; color: #4ecdc4; animation: spin 2s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .local-badge { font-size: 10px; font-family: var(--fm); color: var(--tm); border: 1px solid var(--bl); padding: 1px 6px; border-radius: 4px; }

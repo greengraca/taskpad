@@ -716,6 +716,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
+          <span className="tp-ver">v1.2.1</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -851,14 +852,15 @@ export default function App() {
                 {!synced && <div className="ctx-team-note">Sign in first to enable team</div>}
               </div>
             )}
-            {pr.isTeam && tp && (
+            {pr.isTeam && (
               <div className="ctx-team-section">
                 <span className="ctx-kw-lbl">👥 Team Project</span>
+                {!tp && <div className="ctx-team-note">Loading team data…</div>}
                 <div className="team-members">
-                  {(tp.memberEmails || []).map((email, i) => {
-                    const uid = (tp.memberUids || [])[i];
-                    const nick = tp.nicknames?.[uid] || email.split('@')[0];
-                    const avId = tp.avatars?.[uid];
+                  {(tp?.memberEmails || []).map((email, i) => {
+                    const uid = (tp?.memberUids || [])[i];
+                    const nick = tp?.nicknames?.[uid] || email.split('@')[0];
+                    const avId = tp?.avatars?.[uid];
                     const av = avId !== undefined ? AVATARS[avId] : null;
                     return (
                       <div key={email} className="team-member">
