@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
-  subscribeTeamTasks, createTeamTask, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
+  subscribeTeamTasks, subscribeTeamProject, createTeamTask, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
 } from './sync';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
 import { checkForUpdates } from './updater';
@@ -361,6 +361,7 @@ export default function App() {
   const [nickEditUid, setNickEditUid] = useState(null);
   const [nickEditVal, setNickEditVal] = useState('');
   const [avatarPickUid, setAvatarPickUid] = useState(null);
+  const [teamProjDirect, setTeamProjDirect] = useState({});
 
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
@@ -369,7 +370,7 @@ export default function App() {
   const activeProj = projects.find(p => p.id === activeTab);
   const isTeamTab = !!(activeProj?.isTeam && activeProj?.teamId);
   const teamId = activeProj?.teamId;
-  const teamProjData = isTeamTab ? teamProjects.find(tp => tp.teamId === teamId) : null;
+  const teamProjData = isTeamTab ? (teamProjDirect[teamId] || teamProjects.find(tp => tp.teamId === teamId) || null) : null;
 
   const inboxVisible = tasks.filter(t => {
     const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
@@ -479,6 +480,15 @@ export default function App() {
     if (!isTeamTab || !teamId) return;
     const unsub = subscribeTeamTasks(teamId, (tasks) => {
       setTeamTasksMap(prev => ({ ...prev, [teamId]: tasks }));
+    });
+    return unsub;
+  }, [isTeamTab, teamId]);
+
+  // Subscribe directly to the team project doc for nicknames/avatars
+  useEffect(() => {
+    if (!isTeamTab || !teamId) return;
+    const unsub = subscribeTeamProject(teamId, (projData) => {
+      setTeamProjDirect(prev => ({ ...prev, [teamId]: projData }));
     });
     return unsub;
   }, [isTeamTab, teamId]);
@@ -716,7 +726,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.1</span>
+          <span className="tp-ver">v1.2.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -832,7 +842,7 @@ export default function App() {
       {/* Context menu */}
       {contextMenu && (() => {
         const pr = projects.find(p => p.id === contextMenu.pid); if (!pr) return null;
-        const tp = pr.isTeam ? teamProjects.find(t => t.teamId === pr.teamId) : null;
+        const tp = pr.isTeam ? (teamProjDirect[pr.teamId] || teamProjects.find(t => t.teamId === pr.teamId) || null) : null;
         return (
           <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 260), top: Math.min(contextMenu.y, window.innerHeight - 400) }} onClick={e => e.stopPropagation()}>
             <button className="ctx-it" onClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); setContextMenu(null); }}>✏️ Rename</button>

@@ -255,6 +255,25 @@ export const declineTeamInvite = async ({ inviteId }) => {
   await updateDoc(doc(db, 'invites', inviteId), { status: 'declined', declinedAt: serverTimestamp() });
 };
 
+export const subscribeTeamProject = (teamId, cb) => {
+  if (!isFirebaseConfigured() || !userId) {
+    cb(null);
+    return () => {};
+  }
+  const ref = doc(db, 'projects', teamId);
+  const unsub = onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      cb({ teamId: snap.id, ...snap.data() });
+    } else {
+      cb(null);
+    }
+  }, (e) => {
+    console.warn('Team project doc listener error:', e);
+    cb(null);
+  });
+  return unsub;
+};
+
 export const subscribeTeamTasks = (teamId, cb) => {
   if (!isFirebaseConfigured() || !userId) {
     cb([]);
