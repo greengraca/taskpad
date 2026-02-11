@@ -1,5 +1,5 @@
 {
-  "version": "1.3.4",
-  "notes": "Fix task insert position, fix textarea height",
+  "version": "1.3.5",
+  "notes": "Fix insert at done/undone boundary",
   "url": ""
 }

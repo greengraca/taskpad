@@ -593,13 +593,24 @@ export default function App() {
   };
 
   const insertTask = (afterTaskId) => {
+    // If clicking after a done task, redirect to first-non-done position
+    if (afterTaskId) {
+      const clickedTask = sortedVisible.find(t => t.id === afterTaskId);
+      if (clickedTask?.done) {
+        // Find the last done task in sorted view, insert after it = first undone position
+        const lastDoneIdx = sortedVisible.reduce((acc, t, i) => t.done ? i : acc, -1);
+        afterTaskId = lastDoneIdx >= 0 ? sortedVisible[lastDoneIdx].id : null;
+      }
+    }
+
     if (isTeamTab && teamId) {
-      // Use sortedVisible for correct order calculation
       const sorted = sortedVisible;
       const afterIdx = afterTaskId ? sorted.findIndex(t => t.id === afterTaskId) : -1;
-      const afterOrder = afterIdx >= 0 ? (sorted[afterIdx].order ?? afterIdx) : -1;
-      const nextTask = afterIdx >= 0 && afterIdx + 1 < sorted.length ? sorted[afterIdx + 1] : null;
-      const nextOrder = nextTask ? (nextTask.order ?? afterOrder + 2) : afterOrder + 2;
+      const afterTask = afterIdx >= 0 ? sorted[afterIdx] : null;
+      // For team: compute order between afterTask and the next non-done task
+      const nextUndone = sorted.find((t, i) => i > afterIdx && !t.done);
+      const afterOrder = afterTask ? (afterTask.order ?? afterIdx) : -1;
+      const nextOrder = nextUndone ? (nextUndone.order ?? afterOrder + 2) : afterOrder + 2;
       const newOrder = afterOrder + (nextOrder - afterOrder) / 2;
       const preId = genTeamTaskId(teamId);
       if (preId) {
@@ -621,17 +632,28 @@ export default function App() {
     const nt = { id: genId(), text: '', done: false, projectId: isInbox ? INBOX_ID : activeTab, origin, ts: Date.now(), _new: true };
     up(prev => {
       const all = [...prev.tasks];
+      const vis = isInbox
+        ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
+        : all.filter(t => t.projectId === prev.activeTab);
+
       if (!afterTaskId) {
-        // Insert at very beginning of this view's tasks
-        const vis = isInbox
-          ? all.filter(t => (t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project')) === 'inbox' && !t.hiddenFromInbox)
-          : all.filter(t => t.projectId === prev.activeTab);
+        // Insert at top of this view
         const first = vis[0];
         all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
       } else {
-        // Insert after the specified task in master array
-        const refIdx = all.findIndex(t => t.id === afterTaskId);
-        all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
+        const afterTask = vis.find(t => t.id === afterTaskId);
+        if (afterTask?.done) {
+          // Inserting after a done task: place before the first undone task in master array
+          const firstUndone = vis.find(t => !t.done);
+          if (firstUndone) {
+            all.splice(all.indexOf(firstUndone), 0, nt);
+          } else {
+            all.push(nt);
+          }
+        } else {
+          const refIdx = all.findIndex(t => t.id === afterTaskId);
+          all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
+        }
       }
       return { ...prev, tasks: all };
     });
@@ -811,7 +833,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.4</span>
+          <span className="tp-ver">v1.3.5</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
