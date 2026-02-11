@@ -732,7 +732,18 @@ export default function App() {
     } finally { setTeamBusy(false); setTimeout(() => setInviteResult(null), 3000); }
   };
 
-  const handleAcceptInvite = async (inviteId) => { setTeamBusy(true); try { await acceptTeamInvite({ inviteId }); } catch (e) { console.warn(e); } finally { setTeamBusy(false); } };
+  const handleAcceptInvite = async (inviteId) => {
+    setTeamBusy(true); setTeamErr('');
+    try {
+      await acceptTeamInvite({ inviteId });
+      setInvitesOpen(false);
+      // Reload to pick up new team tab
+      window.location.reload();
+    } catch (e) {
+      console.warn(e);
+      setTeamErr(e?.message || 'Failed to accept invite');
+    } finally { setTeamBusy(false); }
+  };
   const handleDeclineInvite = async (inviteId) => { try { await declineTeamInvite({ inviteId }); } catch (e) { console.warn(e); } };
 
   const saveNickname = async (tid, uid, nick) => {
@@ -780,7 +791,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.0</span>
+          <span className="tp-ver">v1.3.1</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -845,7 +856,7 @@ export default function App() {
                 <div key={inv.id} className="invite-row">
                   <div className="invite-info">
                     <span className="invite-from">From: {inv.fromEmail || 'unknown'}</span>
-                    <span className="invite-proj">Project: {inv.projectId}</span>
+                    <span className="invite-proj">Project: {inv.projectName || inv.projectId}</span>
                   </div>
                   <div className="invite-actions">
                     <button className="invite-accept" disabled={teamBusy} onClick={() => handleAcceptInvite(inv.id)}>Accept</button>
@@ -853,6 +864,7 @@ export default function App() {
                   </div>
                 </div>
               ))}
+              {teamErr && <div className="tp-modal-err" style={{ padding: '6px 0', fontSize: 11 }}>{teamErr}</div>}
             </div>
           </div>
         </div>

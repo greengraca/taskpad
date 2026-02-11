@@ -185,8 +185,13 @@ export const sendTeamInvite = async ({ teamId, toEmail }) => {
   const email = (toEmail || '').trim().toLowerCase();
   if (!email.includes('@')) throw new Error('Valid email required');
 
+  // Fetch project name to include in invite
+  const projSnap = await getDoc(doc(db, 'projects', teamId));
+  const projName = projSnap.exists() ? (projSnap.data().name || 'Team Project') : 'Team Project';
+
   await addDoc(collection(db, 'invites'), {
     projectId: teamId,
+    projectName: projName,
     fromUid: userId,
     fromEmail: userEmail || null,
     toEmail: email,
@@ -206,10 +211,8 @@ export const acceptTeamInvite = async ({ inviteId }) => {
   if (inv.toEmail && userEmail && inv.toEmail.toLowerCase() !== userEmail.toLowerCase())
     throw new Error('Invite does not match this account');
 
+  // Update project to add this user as member
   const projRef = doc(db, 'projects', inv.projectId);
-  const projSnap = await getDoc(projRef);
-  if (!projSnap.exists()) throw new Error('Project not found');
-
   const patch = {
     memberUids: arrayUnion(userId),
     updatedAt: serverTimestamp(),
@@ -230,15 +233,14 @@ export const acceptTeamInvite = async ({ inviteId }) => {
   const already = Array.isArray(local.projects) && local.projects.some(p => p.id === tabId);
 
   if (!already) {
-    const proj = projSnap.data();
     const next = {
       ...local,
       projects: [
         ...(local.projects || []),
         {
           id: tabId,
-          name: proj?.name || 'Team Project',
-          color: proj?.color || '#38bdf8',
+          name: inv.projectName || 'Team Project',
+          color: '#38bdf8',
           keywords: [],
           isTeam: true,
           teamId: inv.projectId,

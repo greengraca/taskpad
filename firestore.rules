@@ -25,12 +25,15 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
 
-      // Owner can update anything; members can update nicknames, avatars, and updatedAt
+      // Owner can update anything; members can update nicknames, avatars
+      // Invited users can join (add themselves to memberUids/memberEmails/nicknames)
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.ownerUid ||
         (request.auth.uid in resource.data.memberUids &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['nicknames', 'avatars', 'updatedAt']))
+           .hasOnly(['nicknames', 'avatars', 'updatedAt'])) ||
+        request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['memberUids', 'memberEmails', 'nicknames', 'updatedAt'])
       );
 
       allow delete: if false;
