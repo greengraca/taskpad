@@ -268,12 +268,11 @@ export const subscribeTeamTasks = (teamId, cb) => {
 
   const qy = query(
     collection(db, 'projects', teamId, 'tasks'),
-    where('deleted', '==', false),
     orderBy('order', 'asc')
   );
 
   const unsub = onSnapshot(qy, (snap) => {
-    const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.deleted);
     cb(tasks);
   }, (e) => {
     console.warn('Team tasks listener error:', e);

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
-  "notes": "Initial public build",
-  "url": "https://github.com/greengraca/taskpad/releases/latest"
+  "version": "1.1.0",
+  "notes": "Team task fix, done-to-bottom sorting, exact keyword matching, Ctrl+Z undo, hide-from-inbox",
+  "url": ""
 }

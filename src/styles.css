@@ -144,8 +144,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: none; }
 .sc-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px solid var(--bl); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color .15s, background .15s; }
 .sc-icon:hover { background: #1a1a1a; border-color: #333; }
-/* White pill behind favicons fixes transparent-bg icons (GitHub, Gmail etc.) */
-.sc-icon img { border-radius: 3px; pointer-events: none; background: #fff; padding: 1px; }
+.sc-icon img { border-radius: 3px; pointer-events: none; }
 .sc-fb { font-size: 14px; font-weight: 700; font-family: var(--fm); }
 
 .sc-add { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px dashed #2a2a2a; color: #555; font-family: var(--fm); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }

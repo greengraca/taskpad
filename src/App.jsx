@@ -8,7 +8,7 @@ import { checkForUpdates } from './updater';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64', color: '#fff' },
-  { id: 'gh', name: 'GitHub', url: 'https://github.com', icon: 'https://www.google.com/s2/favicons?domain=github.com&sz=64', color: '#e6edf3' },
+  { id: 'gh', name: 'GitHub', url: 'https://github.com', icon: '/shortcuts/github.svg', color: '#e6edf3' },
   { id: 'nf', name: 'Netlify', url: 'https://app.netlify.com', icon: 'https://www.google.com/s2/favicons?domain=netlify.com&sz=64', color: '#32e6e2' },
   { id: 'gm', name: 'Gmail', url: 'https://mail.google.com', icon: '/shortcuts/gmail.svg', color: '#ea4335' },
   { id: 'jg', name: 'Portfolio', url: 'https://www.joaograca.work/', icon: '/shortcuts/portfolio.png', color: '#7eb8da' },
@@ -29,6 +29,7 @@ const TAB_COLORS = ['#38bdf8', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#ffe
 const INBOX_ID = '__inbox__';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const EMPTY = [];
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const DEFAULT_DATA = {
   projects: [{ id: 'p1', name: 'Sample', color: '#4ecdc4', keywords: ['sample'] }],
@@ -241,7 +242,6 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     return false;
   };
 
-  // Can hide from inbox: task originated from inbox but is tagged to a project
   const canHide = isInbox && task.projectId !== INBOX_ID && onHide;
 
   return (
@@ -306,6 +306,7 @@ export default function App() {
   const editTabRef = useRef(null);
   const saveRef = useRef(null);
   const undoStackRef = useRef([]);
+  const newTeamTaskIds = useRef(new Set());
 
   // Shortcuts modal
   const [scOpen, setScOpen] = useState(false);
@@ -335,10 +336,8 @@ export default function App() {
   const teamId = activeProj?.teamId;
   const teamProjData = isTeamTab ? teamProjects.find(tp => tp.teamId === teamId) : null;
 
-  // Inbox: show tasks that originated from inbox (including auto-detected ones) unless hidden
-  // A task written in inbox that matches a project lives in BOTH places — same object, synced done state
+  // Inbox: tasks that originated from inbox, unless hidden
   const inboxVisible = tasks.filter(t => {
-    // Explicit origin field takes priority; fallback for legacy tasks
     const origin = t.origin || (t.projectId === INBOX_ID ? 'inbox' : 'project');
     return origin === 'inbox' && !t.hiddenFromInbox;
   });
@@ -349,9 +348,14 @@ export default function App() {
   } else if (isTeamTab) {
     visible = teamTasksMap[teamId] || EMPTY;
   } else {
-    // Project tab: show tasks whose projectId matches (regardless of origin)
     visible = tasks.filter(t => t.projectId === activeTab);
   }
+
+  // Sort: active tasks first, done tasks at bottom
+  const sortedVisible = [...visible].sort((a, b) => {
+    if (a.done === b.done) return 0;
+    return a.done ? 1 : -1;
+  });
 
   const accent = isInbox ? '#38bdf8' : (activeProj?.color || '#38bdf8');
 
@@ -399,14 +403,13 @@ export default function App() {
   const reorderSc = useCallback((newSc) => up(p => p ? { ...p, scOrder: newSc.map(s => s.id) } : p), [up]);
 
   const effectiveReorder = isTeamTab ? reorderTeamVisible : reorderVisible;
-  const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(visible, effectiveReorder);
+  const { containerRef, itemRefs: taskRefs, onPointerDown: onTaskDrag, getStyle: getTaskStyle, isDragging: isTaskDragging } = useDragReorder(sortedVisible, effectiveReorder);
   const { itemRefs: scRefs, onPointerDown: onScDrag, getStyle: getScStyle } = useHDragReorder(orderedSc, reorderSc);
 
   // ─── Init sync ───
   useEffect(() => {
     const normalizeLoaded = (loaded) => {
       const base = loaded && Array.isArray(loaded.tasks) ? { ...DEFAULT_DATA, ...loaded } : { ...DEFAULT_DATA };
-      // Backfill origin for legacy tasks that don't have it
       if (Array.isArray(base.tasks)) {
         base.tasks = base.tasks.map(t => t.origin ? t : { ...t, origin: t.projectId === INBOX_ID ? 'inbox' : 'project' });
       }
@@ -456,7 +459,6 @@ export default function App() {
         if (!entry) return;
         up(p => {
           const all = [...p.tasks];
-          // Insert back at original position or end
           const idx = Math.min(entry._undoIdx ?? all.length, all.length);
           const restored = { ...entry }; delete restored._undoIdx;
           all.splice(idx, 0, restored);
@@ -491,21 +493,30 @@ export default function App() {
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
   // ─── Task operations ───
-  const detectProject = (text) => { const low = text.toLowerCase(); for (const p of projects) { if (p.isTeam) continue; if (low.includes(p.name.toLowerCase())) return p.id; if (p.keywords?.some(k => low.includes(k.toLowerCase()))) return p.id; } return null; };
+
+  // Exact word match, case insensitive. "top4" won't match "top" and vice versa.
+  const detectProject = (text) => {
+    const low = text.toLowerCase();
+    for (const p of projects) {
+      if (p.isTeam) continue;
+      const nameRe = new RegExp('\\b' + escRe(p.name.toLowerCase()) + '\\b', 'i');
+      if (nameRe.test(low)) return p.id;
+      if (p.keywords?.some(k => {
+        const kwRe = new RegExp('\\b' + escRe(k.toLowerCase()) + '\\b', 'i');
+        return kwRe.test(low);
+      })) return p.id;
+    }
+    return null;
+  };
 
   const insertTask = (afterIdx) => {
     if (isTeamTab && teamId) {
-      // Create a temporary local task for inline editing, commit to Firestore on save
       const vis = teamTasksMap[teamId] || [];
       const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
-      const tempId = `_tmp_${genId()}`;
-      const tempTask = { id: tempId, text: '', done: false, _new: true, _temp: true, _teamId: teamId, _afterOrder: afterOrder, order: afterOrder + 0.5, createdByUid: authUser?.uid, createdByEmail: authUser?.email };
-      setTeamTasksMap(prev => {
-        const list = [...(prev[teamId] || [])];
-        if (afterIdx < 0) list.unshift(tempTask);
-        else list.splice(afterIdx + 1, 0, tempTask);
-        return { ...prev, [teamId]: list };
-      });
+      // Create task directly in Firestore, track ID for auto-focus
+      createTeamTask({ teamId, text: '', afterOrder }).then(docId => {
+        newTeamTaskIds.current.add(docId);
+      }).catch(e => console.warn('Team task create failed:', e));
       return;
     }
 
@@ -524,14 +535,8 @@ export default function App() {
 
   const changeTask = (id, text) => {
     if (isTeamTab && teamId) {
-      // Check if it's a temp task that needs to be committed to Firestore
-      const task = (teamTasksMap[teamId] || []).find(t => t.id === id);
-      if (task?._temp) {
-        // Remove temp, create real Firestore task
-        setTeamTasksMap(prev => ({ ...prev, [teamId]: (prev[teamId] || []).filter(t => t.id !== id) }));
-        if (text.trim()) {
-          createTeamTask({ teamId, text: text.trim(), afterOrder: task._afterOrder }).catch(e => console.warn('Team task create failed:', e));
-        }
+      if (!text.trim()) {
+        deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
       } else {
         updateTeamTask({ teamId, taskId: id, patch: { text } }).catch(e => console.warn('Team task update failed:', e));
       }
@@ -540,9 +545,9 @@ export default function App() {
     up(prev => {
       const existing = prev.tasks.find(t => t.id === id);
       let pid = existing?.projectId;
-      // Always preserve the origin — inbox-origin tasks stay inbox-origin even when matched to a project
       const origin = existing?.origin || 'inbox';
-      if (origin === 'inbox') { const d = detectProject(text); if (d) pid = d; }
+      // Only auto-detect project from inbox, never move tasks created on a project tab
+      if (origin === 'inbox') { const d = detectProject(text); if (d) pid = d; else pid = INBOX_ID; }
       return { ...prev, tasks: prev.tasks.map(t => t.id === id ? { ...t, text, projectId: pid, origin, _new: false } : t) };
     });
   };
@@ -550,7 +555,7 @@ export default function App() {
   const toggleTask = (id) => {
     if (isTeamTab && teamId) {
       const t = (teamTasksMap[teamId] || []).find(x => x.id === id);
-      if (t && !t._temp) updateTeamTask({ teamId, taskId: id, patch: { done: !t.done } }).catch(e => console.warn(e));
+      if (t) updateTeamTask({ teamId, taskId: id, patch: { done: !t.done } }).catch(e => console.warn(e));
       return;
     }
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) }));
@@ -558,21 +563,14 @@ export default function App() {
 
   const deleteTask = (id) => {
     if (isTeamTab && teamId) {
-      const task = (teamTasksMap[teamId] || []).find(t => t.id === id);
-      if (task?._temp) {
-        setTeamTasksMap(prev => ({ ...prev, [teamId]: (prev[teamId] || []).filter(t => t.id !== id) }));
-      } else {
-        deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
-      }
+      deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
       return;
     }
-    // Save to undo stack before deleting
     up(p => {
       const idx = p.tasks.findIndex(t => t.id === id);
       const task = p.tasks[idx];
       if (task) {
         undoStackRef.current.push({ ...task, _undoIdx: idx });
-        // Keep max 30 undo entries
         if (undoStackRef.current.length > 30) undoStackRef.current.shift();
       }
       return { ...p, tasks: p.tasks.filter(t => t.id !== id) };
@@ -648,7 +646,7 @@ export default function App() {
     setNickEditUid(null);
   };
 
-  const done = visible.filter(t => t.done).length, total = visible.length;
+  const done = sortedVisible.filter(t => t.done).length, total = sortedVisible.length;
 
   // ─── Shortcut helpers ───
   const autoIconForUrl = (url) => { try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`; } catch { return ''; } };
@@ -670,7 +668,6 @@ export default function App() {
 
   return (
     <div className="tp-root">
-      {/* Update banner */}
       {updateInfo && (
         <div className="update-banner">
           <span>Update v{updateInfo.latestVersion} available{updateInfo.notes ? ` — ${updateInfo.notes}` : ''}</span>
@@ -702,7 +699,6 @@ export default function App() {
         <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}>{data.showSc ? '◫' : '◻'}</button>
       </header>
 
-      {/* Auth modal */}
       {isFirebaseConfigured() && authOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => !authBusy && setAuthOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -734,7 +730,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Invites modal */}
       {invitesOpen && (
         <div className="tp-modal-backdrop" onMouseDown={() => setInvitesOpen(false)}>
           <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
@@ -794,7 +789,6 @@ export default function App() {
         <button className="tp-t-add" onClick={addProject}>+</button>
       </div></nav>
 
-      {/* Context menu */}
       {contextMenu && (() => {
         const pr = projects.find(p => p.id === contextMenu.pid); if (!pr) return null;
         const tp = pr.isTeam ? teamProjects.find(t => t.teamId === pr.teamId) : null;
@@ -802,7 +796,6 @@ export default function App() {
           <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 260), top: Math.min(contextMenu.y, window.innerHeight - 400) }} onClick={e => e.stopPropagation()}>
             <button className="ctx-it" onClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); setContextMenu(null); }}>✏️ Rename</button>
             <div className="ctx-cols">{TAB_COLORS.map(c => <button key={c} className="ctx-dot" style={{ background: c }} onClick={() => changeTabColor(pr.id, c)} />)}</div>
-
             {!pr.isTeam && (
               <div className="ctx-kw">
                 <span className="ctx-kw-lbl">Auto-detect keywords:</span>
@@ -810,7 +803,6 @@ export default function App() {
                 <input className="kw-in" placeholder="Add keyword + Enter" onKeyDown={e => { if (e.key === 'Enter' && e.target.value.trim()) { addKeyword(pr.id, e.target.value); e.target.value = ''; } }} />
               </div>
             )}
-
             {!pr.isTeam && isFirebaseConfigured() && (
               <div className="ctx-team-section">
                 <button className="ctx-it" disabled={teamBusy} onClick={() => enableTeam(pr.id)}>
@@ -819,7 +811,6 @@ export default function App() {
                 {!synced && <div className="ctx-team-note">Sign in first to enable team</div>}
               </div>
             )}
-
             {pr.isTeam && tp && (
               <div className="ctx-team-section">
                 <span className="ctx-kw-lbl">👥 Team Project</span>
@@ -850,7 +841,6 @@ export default function App() {
                 </div>
               </div>
             )}
-
             {teamErr && <div className="tp-modal-err" style={{ padding: '4px 12px', fontSize: 11 }}>{teamErr}</div>}
             <button className="ctx-it ctx-del" onClick={() => deleteProject(pr.id)}>🗑 Delete project</button>
           </div>
@@ -866,19 +856,25 @@ export default function App() {
           </div>
         )}
         <div className="tp-tasks" ref={containerRef}>
-          {visible.length === 0 && <div className="tp-empty" onClick={() => insertTask(-1)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
-          {visible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(-1)} color={accent} />}
-          {visible.map((task, idx) => (
-            <div key={task.id}>
-              <TaskLine task={task} allProjects={projects} accentColor={accent} isInbox={isInbox}
-                isTeam={isTeamTab} nicknames={teamProjData?.nicknames}
-                onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
-                onHide={isInbox ? hideFromInbox : null}
-                dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
-                refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
-              {!isTaskDragging && <InsertZone onClick={() => insertTask(idx)} color={accent} />}
-            </div>
-          ))}
+          {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(-1)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
+          {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(-1)} color={accent} />}
+          {sortedVisible.map((task, idx) => {
+            // Check if this is a newly created team task that needs auto-focus
+            const isNewTeam = newTeamTaskIds.current.has(task.id);
+            if (isNewTeam) newTeamTaskIds.current.delete(task.id);
+            const taskObj = isNewTeam ? { ...task, _new: true } : task;
+            return (
+              <div key={task.id}>
+                <TaskLine task={taskObj} allProjects={projects} accentColor={accent} isInbox={isInbox}
+                  isTeam={isTeamTab} nicknames={teamProjData?.nicknames}
+                  onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
+                  onHide={isInbox ? hideFromInbox : null}
+                  dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
+                  refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
+                {!isTaskDragging && <InsertZone onClick={() => insertTask(idx)} color={accent} />}
+              </div>
+            );
+          })}
         </div>
       </main>
 
