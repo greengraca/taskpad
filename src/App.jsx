@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
-  subscribeTeamTasks, subscribeTeamProject, createTeamTask, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
+  subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject
 } from './sync';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
 import { checkForUpdates } from './updater';
@@ -559,9 +559,21 @@ export default function App() {
     if (isTeamTab && teamId) {
       const vis = teamTasksMap[teamId] || [];
       const afterOrder = afterIdx >= 0 && vis[afterIdx] ? (vis[afterIdx].order ?? afterIdx) : -1;
-      createTeamTask({ teamId, text: '', afterOrder }).then(docId => {
-        newTeamTaskIds.current.add(docId);
-      }).catch(e => console.warn('Team task create failed:', e));
+      const preId = genTeamTaskId(teamId);
+      if (preId) {
+        newTeamTaskIds.current.add(preId);
+        // Optimistically add to local state for instant focus
+        const optimistic = { id: preId, text: '', done: false, deleted: false, order: afterOrder + 1, _new: true, _optimistic: true,
+          createdByUid: authUser?.uid, createdByEmail: authUser?.email, ts: { seconds: Date.now() / 1000 } };
+        setTeamTasksMap(prev => {
+          const existing = prev[teamId] || [];
+          const insertAt = afterIdx >= 0 ? afterIdx + 1 : 0;
+          const next = [...existing];
+          next.splice(insertAt, 0, optimistic);
+          return { ...prev, [teamId]: next };
+        });
+      }
+      createTeamTask({ teamId, text: '', afterOrder, taskId: preId }).catch(e => console.warn('Team task create failed:', e));
       return;
     }
     const origin = isInbox ? 'inbox' : 'project';
@@ -579,6 +591,7 @@ export default function App() {
 
   const changeTask = (id, text) => {
     if (isTeamTab && teamId) {
+      newTeamTaskIds.current.delete(id);
       if (!text.trim()) {
         deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
       } else {
@@ -726,7 +739,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.2.4</span>
+          <span className="tp-ver">v1.2.5</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -930,7 +943,6 @@ export default function App() {
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(-1)} color={accent} />}
           {sortedVisible.map((task, idx) => {
             const isNewTeam = newTeamTaskIds.current.has(task.id);
-            if (isNewTeam) newTeamTaskIds.current.delete(task.id);
             const taskObj = isNewTeam ? { ...task, _new: true } : task;
             return (
               <div key={task.id}>

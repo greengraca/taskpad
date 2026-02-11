@@ -308,11 +308,20 @@ export const subscribeTeamTasks = (teamId, cb) => {
   };
 };
 
-export const createTeamTask = async ({ teamId, text, afterOrder }) => {
+export const genTeamTaskId = (teamId) => {
+  if (!isFirebaseConfigured()) return null;
+  return doc(collection(db, 'projects', teamId, 'tasks')).id;
+};
+
+export const createTeamTask = async ({ teamId, text, afterOrder, taskId }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in to add team tasks');
   const order = typeof afterOrder === 'number' ? afterOrder + 1 : Date.now();
 
-  const ref = await addDoc(collection(db, 'projects', teamId, 'tasks'), {
+  const ref = taskId
+    ? doc(db, 'projects', teamId, 'tasks', taskId)
+    : doc(collection(db, 'projects', teamId, 'tasks'));
+
+  await setDoc(ref, {
     text: (text || '').trim(),
     done: false,
     deleted: false,

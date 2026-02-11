@@ -25,11 +25,14 @@ export async function checkForUpdates() {
   const latestVersion = latest.version;
   const isUpdateAvailable = semverCmp(latestVersion, currentVersion) > 0;
 
+  // Derive download URL: use explicit url from version.json, or strip /version.json from update URL
+  const downloadUrl = latest.url || url.replace(/\/version\.json$/, '') || '';
+
   return {
     isUpdateAvailable,
     currentVersion,
     latestVersion,
     notes: latest.notes || '',
-    downloadUrl: latest.url || '',
+    downloadUrl,
   };
 }

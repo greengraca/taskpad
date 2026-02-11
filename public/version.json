@@ -1,5 +1,5 @@
 {
-  "version": "1.2.4",
-  "notes": "Scrollable shortcuts, mobile ring fix, wider Tauri window",
+  "version": "1.2.5",
+  "notes": "Team task auto-focus fix, update download button",
   "url": ""
 }
