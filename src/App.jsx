@@ -233,7 +233,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
@@ -244,8 +244,13 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    el.style.height = '0px';
-    el.style.height = `${Math.max(el.scrollHeight, minHRef.current)}px`;
+    // Temporarily remove constraints to measure true content height
+    const savedMin = el.style.minHeight;
+    el.style.minHeight = '0px';
+    el.style.height = 'auto';
+    const contentH = el.scrollHeight;
+    el.style.minHeight = savedMin;
+    el.style.height = `${Math.max(contentH, minHRef.current)}px`;
   }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); minHRef.current = 0; };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -277,8 +282,14 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
 
   const canHide = isInbox && task.projectId !== INBOX_ID && onHide;
 
-  const startEditing = () => {
+  const startEditing = (e) => {
     if (editing) return;
+    // Ctrl/Cmd+Click = select, not edit
+    if ((e?.ctrlKey || e?.metaKey) && onSelect) {
+      e.preventDefault();
+      onSelect(task.id, 'toggle');
+      return;
+    }
     if (textRef.current) {
       minHRef.current = textRef.current.offsetHeight;
     }
@@ -286,7 +297,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   };
 
   return (
-    <div className={`task-row ${task.done ? 'task-done' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
+    <div className={`task-row ${task.done ? 'task-done' : ''} ${selected ? 'task-selected' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
       <div className="drag-grip" onMouseDown={dragHandle} onTouchStart={dragHandle}>⠿</div>
       <button onClick={() => onToggle(task.id)} className="checkbox">
         <div className="cb-inner" style={{ background: task.done ? accentColor : 'transparent', borderColor: task.done ? accentColor : '#555' }}>
@@ -387,6 +398,9 @@ export default function App() {
   const [nickEditVal, setNickEditVal] = useState('');
   const [avatarPickUid, setAvatarPickUid] = useState(null);
   const [teamProjDirect, setTeamProjDirect] = useState({});
+
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
@@ -536,25 +550,56 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  // ─── Ctrl+Z undo ───
+  // ─── Ctrl+Z undo / Ctrl+C copy / Ctrl+A select ───
   useEffect(() => {
     const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.target.closest('input, textarea')) {
+      // Escape: clear selection
+      if (e.key === 'Escape' && selectedIds.size > 0 && !e.target.closest('input, textarea')) {
+        setSelectedIds(new Set());
+        return;
+      }
+
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.target.closest('input, textarea')) return;
+
+      // Ctrl+Z: undo
+      if (e.key === 'z') {
         e.preventDefault();
         const entry = undoStackRef.current.pop();
         if (!entry) return;
-        up(p => {
-          const all = [...p.tasks];
-          const idx = Math.min(entry._undoIdx ?? all.length, all.length);
-          const restored = { ...entry }; delete restored._undoIdx;
-          all.splice(idx, 0, restored);
-          return { ...p, tasks: all };
-        });
+        if (entry._teamId) {
+          // Restore team task
+          updateTeamTask({ teamId: entry._teamId, taskId: entry._taskId, patch: { deleted: false } }).catch(e => console.warn(e));
+        } else {
+          up(p => {
+            const all = [...p.tasks];
+            const idx = Math.min(entry._undoIdx ?? all.length, all.length);
+            const restored = { ...entry }; delete restored._undoIdx;
+            all.splice(idx, 0, restored);
+            return { ...p, tasks: all };
+          });
+        }
+        return;
+      }
+
+      // Ctrl+A: select all visible tasks
+      if (e.key === 'a') {
+        e.preventDefault();
+        setSelectedIds(new Set(sortedVisible.map(t => t.id)));
+        return;
+      }
+
+      // Ctrl+C: copy selected task texts
+      if (e.key === 'c' && selectedIds.size > 0) {
+        e.preventDefault();
+        const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n');
+        navigator.clipboard.writeText(texts).catch(() => {});
+        return;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [up]);
+  }, [up, selectedIds, sortedVisible]);
 
   const runAuth = async () => {
     setAuthBusy(true); setAuthErr('');
@@ -593,14 +638,10 @@ export default function App() {
   };
 
   const insertTask = (afterTaskId) => {
-    // If clicking after a done task, redirect to first-non-done position
+    // If clicking after a done task, insert as first undone (top of list, sort handles the rest)
     if (afterTaskId) {
       const clickedTask = sortedVisible.find(t => t.id === afterTaskId);
-      if (clickedTask?.done) {
-        // Find the last done task in sorted view, insert after it = first undone position
-        const lastDoneIdx = sortedVisible.reduce((acc, t, i) => t.done ? i : acc, -1);
-        afterTaskId = lastDoneIdx >= 0 ? sortedVisible[lastDoneIdx].id : null;
-      }
+      if (clickedTask?.done) afterTaskId = null;
     }
 
     if (isTeamTab && teamId) {
@@ -641,19 +682,8 @@ export default function App() {
         const first = vis[0];
         all.splice(Math.max(0, first ? all.indexOf(first) : 0), 0, nt);
       } else {
-        const afterTask = vis.find(t => t.id === afterTaskId);
-        if (afterTask?.done) {
-          // Inserting after a done task: place before the first undone task in master array
-          const firstUndone = vis.find(t => !t.done);
-          if (firstUndone) {
-            all.splice(all.indexOf(firstUndone), 0, nt);
-          } else {
-            all.push(nt);
-          }
-        } else {
-          const refIdx = all.findIndex(t => t.id === afterTaskId);
-          all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
-        }
+        const refIdx = all.findIndex(t => t.id === afterTaskId);
+        all.splice(refIdx >= 0 ? refIdx + 1 : all.length, 0, nt);
       }
       return { ...prev, tasks: all };
     });
@@ -695,6 +725,11 @@ export default function App() {
 
   const deleteTask = (id) => {
     if (isTeamTab && teamId) {
+      const task = (teamTasksMap[teamId] || []).find(t => t.id === id);
+      if (task) {
+        undoStackRef.current.push({ _teamId: teamId, _taskId: id });
+        if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+      }
       deleteTeamTask({ teamId, taskId: id }).catch(e => console.warn(e));
       return;
     }
@@ -712,6 +747,19 @@ export default function App() {
   const hideFromInbox = (id) => {
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, hiddenFromInbox: true } : t) }));
   };
+
+  const onSelectTask = (id, mode) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (mode === 'toggle') {
+        if (next.has(id)) next.delete(id); else next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Clear selection when switching tabs
+  useEffect(() => { setSelectedIds(new Set()); }, [activeTab]);
 
   const clearDone = () => {
     if (isTeamTab && teamId) {
@@ -833,7 +881,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.5</span>
+          <span className="tp-ver">v1.3.6</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1038,7 +1086,17 @@ export default function App() {
             {done > 0 && <button className="tp-pcl" onClick={clearDone}>Clear done</button>}
           </div>
         )}
-        <div className="tp-tasks" ref={containerRef}>
+        {selectedIds.size > 0 && (
+          <div className="tp-sel-bar">
+            <span>{selectedIds.size} selected</span>
+            <button onClick={() => {
+              const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n');
+              navigator.clipboard.writeText(texts).then(() => setSelectedIds(new Set())).catch(() => {});
+            }}>Copy</button>
+            <button onClick={() => setSelectedIds(new Set())}>✕</button>
+          </div>
+        )}
+        <div className="tp-tasks" ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0) setSelectedIds(new Set()); }}>
           {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}
           {sortedVisible.map((task, idx) => {
@@ -1050,6 +1108,7 @@ export default function App() {
                   isTeam={isTeamTab} nicknames={teamProjData?.nicknames} avatars={teamProjData?.avatars}
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
+                  selected={selectedIds.has(task.id)} onSelect={onSelectTask}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
                   refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
                 {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} />}
