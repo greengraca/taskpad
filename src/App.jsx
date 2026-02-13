@@ -308,7 +308,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text}
             style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
-            onChange={e => setText(e.target.value)} onBlur={commit}
+            onChange={e => { setText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, minHRef.current)}px`; }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
