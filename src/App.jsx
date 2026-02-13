@@ -620,7 +620,7 @@ export default function App() {
       // Ctrl+C: copy selected task texts
       if (e.key === 'c' && sel.size > 0) {
         e.preventDefault();
-        const texts = sorted.filter(t => sel.has(t.id)).map(t => t.text).join('\n');
+        const texts = sorted.filter(t => sel.has(t.id)).map(t => t.text).join('\n\n');
         navigator.clipboard.writeText(texts).catch(() => {});
         return;
       }
@@ -1152,7 +1152,7 @@ export default function App() {
           <div className="tp-sel-bar">
             <span>{selectedIds.size} selected</span>
             <button onClick={() => {
-              const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n');
+              const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n\n');
               navigator.clipboard.writeText(texts).then(() => setSelectedIds(new Set())).catch(() => {});
             }}>Copy</button>
             <button onClick={() => setSelectedIds(new Set())}>✕</button>
