@@ -1,5 +1,5 @@
 {
-  "version": "1.3.6",
-  "notes": "Textarea expand, done-zone insert, insert z-index, multi-select copy, team undo",
+  "version": "1.3.7",
+  "notes": "Fix infinite re-render crash",
   "url": ""
 }

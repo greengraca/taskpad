@@ -401,6 +401,8 @@ export default function App() {
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
 
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
@@ -430,6 +432,8 @@ export default function App() {
     if (a.done === b.done) return 0;
     return a.done ? -1 : 1;
   });
+  const sortedVisibleRef = useRef(sortedVisible);
+  sortedVisibleRef.current = sortedVisible;
 
   const accent = isInbox ? '#38bdf8' : (activeProj?.color || '#38bdf8');
 
@@ -553,8 +557,11 @@ export default function App() {
   // ─── Ctrl+Z undo / Ctrl+C copy / Ctrl+A select ───
   useEffect(() => {
     const handler = (e) => {
+      const sel = selectedIdsRef.current;
+      const sorted = sortedVisibleRef.current;
+
       // Escape: clear selection
-      if (e.key === 'Escape' && selectedIds.size > 0 && !e.target.closest('input, textarea')) {
+      if (e.key === 'Escape' && sel.size > 0 && !e.target.closest('input, textarea')) {
         setSelectedIds(new Set());
         return;
       }
@@ -568,7 +575,6 @@ export default function App() {
         const entry = undoStackRef.current.pop();
         if (!entry) return;
         if (entry._teamId) {
-          // Restore team task
           updateTeamTask({ teamId: entry._teamId, taskId: entry._taskId, patch: { deleted: false } }).catch(e => console.warn(e));
         } else {
           up(p => {
@@ -585,21 +591,21 @@ export default function App() {
       // Ctrl+A: select all visible tasks
       if (e.key === 'a') {
         e.preventDefault();
-        setSelectedIds(new Set(sortedVisible.map(t => t.id)));
+        setSelectedIds(new Set(sorted.map(t => t.id)));
         return;
       }
 
       // Ctrl+C: copy selected task texts
-      if (e.key === 'c' && selectedIds.size > 0) {
+      if (e.key === 'c' && sel.size > 0) {
         e.preventDefault();
-        const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n');
+        const texts = sorted.filter(t => sel.has(t.id)).map(t => t.text).join('\n');
         navigator.clipboard.writeText(texts).catch(() => {});
         return;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [up, selectedIds, sortedVisible]);
+  }, [up]);
 
   const runAuth = async () => {
     setAuthBusy(true); setAuthErr('');
@@ -759,7 +765,7 @@ export default function App() {
   };
 
   // Clear selection when switching tabs
-  useEffect(() => { setSelectedIds(new Set()); }, [activeTab]);
+  useEffect(() => { setSelectedIds(prev => prev.size > 0 ? new Set() : prev); }, [activeTab]);
 
   const clearDone = () => {
     if (isTeamTab && teamId) {
@@ -881,7 +887,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.6</span>
+          <span className="tp-ver">v1.3.7</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
