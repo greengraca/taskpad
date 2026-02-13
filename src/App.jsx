@@ -233,7 +233,7 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, onDragSelectStart, onDragSelectEnter, dragSelectRef }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
@@ -282,12 +282,32 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
 
   const canHide = isInbox && task.projectId !== INBOX_ID && onHide;
 
-  const startEditing = (e) => {
+  const pendingClickRef = useRef(null);
+
+  const handleBodyMouseDown = (e) => {
     if (editing) return;
-    // Ctrl/Cmd+Click = select, not edit
-    if ((e?.ctrlKey || e?.metaKey) && onSelect) {
+    if (e.button !== 0) return;
+    // Ctrl/Cmd+Click = toggle select, not edit
+    if ((e.ctrlKey || e.metaKey) && onSelect) {
       e.preventDefault();
       onSelect(task.id, 'toggle');
+      return;
+    }
+    // Start potential drag-select
+    if (onDragSelectStart) {
+      pendingClickRef.current = { x: e.clientX, y: e.clientY };
+      onDragSelectStart(task.id, e.clientY);
+    }
+  };
+
+  const handleBodyClick = (e) => {
+    if (editing) return;
+    if (e.ctrlKey || e.metaKey) return; // handled in mousedown
+    if (!pendingClickRef.current) return;
+    pendingClickRef.current = null;
+    // If drag-select was activated, don't edit — stop propagation to keep selection
+    if (dragSelectRef?.current?.justEnded || dragSelectRef?.current?.active) {
+      e.stopPropagation();
       return;
     }
     if (textRef.current) {
@@ -297,18 +317,19 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   };
 
   return (
-    <div className={`task-row ${task.done ? 'task-done' : ''} ${selected ? 'task-selected' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}>
+    <div className={`task-row ${task.done ? 'task-done' : ''} ${selected ? 'task-selected' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}
+      onMouseEnter={() => { if (onDragSelectEnter) onDragSelectEnter(task.id); }}>
       <div className="drag-grip" onMouseDown={dragHandle} onTouchStart={dragHandle}>⠿</div>
       <button onClick={() => onToggle(task.id)} className="checkbox">
         <div className="cb-inner" style={{ background: task.done ? accentColor : 'transparent', borderColor: task.done ? accentColor : '#555' }}>
           {task.done && <span className="chk">✓</span>}
         </div>
       </button>
-      <div className="task-body" onClick={startEditing}>
+      <div className="task-body" onMouseDown={handleBodyMouseDown} onClick={handleBodyClick}>
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text}
             style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
-            onChange={e => setText(e.target.value)} onBlur={commit}
+            onChange={e => { setText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, minHRef.current)}px`; }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
@@ -403,6 +424,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
+  const dragSelectRef = useRef({ active: false, startId: null, startY: 0 });
 
   const projects = data?.projects || EMPTY;
   const tasks = data?.tasks || EMPTY;
@@ -628,6 +650,40 @@ export default function App() {
 
   // Clear selection when switching tabs (must be before early return to satisfy Rules of Hooks)
   useEffect(() => { setSelectedIds(prev => prev.size > 0 ? new Set() : prev); }, [activeTab]);
+
+  // Drag-to-select callbacks (hooks must be before early return)
+  const onDragSelectStart = useCallback((id, y) => {
+    dragSelectRef.current = { active: false, startId: id, startY: y };
+  }, []);
+  const onDragSelectEnter = useCallback((id) => {
+    const ds = dragSelectRef.current;
+    if (!ds.startId || !ds.active) return;
+    const sorted = sortedVisibleRef.current;
+    const startIdx = sorted.findIndex(t => t.id === ds.startId);
+    const endIdx = sorted.findIndex(t => t.id === id);
+    if (startIdx < 0 || endIdx < 0) return;
+    const lo = Math.min(startIdx, endIdx);
+    const hi = Math.max(startIdx, endIdx);
+    setSelectedIds(new Set(sorted.slice(lo, hi + 1).map(t => t.id)));
+  }, []);
+  useEffect(() => {
+    const onMove = (e) => {
+      const ds = dragSelectRef.current;
+      if (!ds.startId) return;
+      if (!ds.active && Math.abs(e.clientY - ds.startY) > 5) {
+        ds.active = true;
+        setSelectedIds(new Set([ds.startId]));
+      }
+    };
+    const onUp = () => {
+      const wasActive = dragSelectRef.current.active;
+      dragSelectRef.current = { active: false, startId: null, startY: 0, justEnded: wasActive };
+      if (wasActive) setTimeout(() => { dragSelectRef.current.justEnded = false; }, 0);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
@@ -1102,7 +1158,7 @@ export default function App() {
             <button onClick={() => setSelectedIds(new Set())}>✕</button>
           </div>
         )}
-        <div className="tp-tasks" ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0) setSelectedIds(new Set()); }}>
+        <div className="tp-tasks" ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
           {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}
           {sortedVisible.map((task, idx) => {
@@ -1115,6 +1171,7 @@ export default function App() {
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
                   selected={selectedIds.has(task.id)} onSelect={onSelectTask}
+                  onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
                   refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
                 {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} />}
