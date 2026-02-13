@@ -626,6 +626,9 @@ export default function App() {
   useEffect(() => { const h = () => setContextMenu(null); window.addEventListener('click', h); return () => window.removeEventListener('click', h); }, []);
   useEffect(() => { if (!scUnlocked) return; const h = (e) => { if (!e.target.closest('.sc-bar')) setScUnlocked(false); }; window.addEventListener('mouseup', h); return () => window.removeEventListener('mouseup', h); }, [scUnlocked]);
 
+  // Clear selection when switching tabs (must be before early return to satisfy Rules of Hooks)
+  useEffect(() => { setSelectedIds(prev => prev.size > 0 ? new Set() : prev); }, [activeTab]);
+
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
   // ─── Task operations ───
@@ -764,9 +767,6 @@ export default function App() {
     });
   };
 
-  // Clear selection when switching tabs
-  useEffect(() => { setSelectedIds(prev => prev.size > 0 ? new Set() : prev); }, [activeTab]);
-
   const clearDone = () => {
     if (isTeamTab && teamId) {
       const doneTasks = (teamTasksMap[teamId] || []).filter(t => t.done);
@@ -887,7 +887,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.7</span>
+          <span className="tp-ver">v1.3.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
