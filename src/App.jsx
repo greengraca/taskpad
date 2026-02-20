@@ -645,7 +645,15 @@ export default function App() {
   };
 
   useEffect(() => { if (editingTab && editTabRef.current) editTabRef.current.focus(); }, [editingTab]);
-  useEffect(() => { const h = () => setContextMenu(null); window.addEventListener('click', h); return () => window.removeEventListener('click', h); }, []);
+  useEffect(() => {
+    const h = (e) => {
+      if (e.target.closest('.tp-ctx')) return;
+      setContextMenu(null);
+    };
+    window.addEventListener('click', h);
+    window.addEventListener('touchstart', h, { passive: true });
+    return () => { window.removeEventListener('click', h); window.removeEventListener('touchstart', h); };
+  }, []);
   useEffect(() => { if (!scUnlocked) return; const h = (e) => { if (!e.target.closest('.sc-bar')) setScUnlocked(false); }; window.addEventListener('mouseup', h); return () => window.removeEventListener('mouseup', h); }, [scUnlocked]);
 
   // Clear selection when switching tabs (must be before early return to satisfy Rules of Hooks)
@@ -853,6 +861,37 @@ export default function App() {
   const addKeyword = (pid, kw) => { if (!kw.trim()) return; up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: [...new Set([...(x.keywords || []), kw.trim().toLowerCase()])] } : x) })); };
   const removeKeyword = (pid, kw) => { up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: (x.keywords || []).filter(k => k !== kw) } : x) })); };
 
+  // ─── Tab touch long-press (iOS context menu) ───
+  const tabTouchRef = useRef({ timer: null, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
+  const tabTouchStart = (e, pid) => {
+    const t = e.touches[0];
+    const ref = tabTouchRef.current;
+    ref.pid = pid; ref.startX = t.clientX; ref.startY = t.clientY; ref.moved = false; ref.longPressed = false;
+    clearTimeout(ref.timer);
+    ref.timer = setTimeout(() => {
+      ref.timer = null;
+      ref.longPressed = true;
+      // Long press → context menu
+      setContextMenu({ x: ref.startX, y: ref.startY + 30, pid });
+      setTeamErr('');
+    }, 500);
+  };
+  const tabTouchMove = (e, pid) => {
+    const ref = tabTouchRef.current;
+    if (!ref.timer) return;
+    const t = e.touches[0];
+    const dx = t.clientX - ref.startX, dy = t.clientY - ref.startY;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      clearTimeout(ref.timer); ref.timer = null; ref.moved = true;
+      // Start drag
+      onTabDrag(e, pid, t.clientX);
+    }
+  };
+  const tabTouchEnd = () => {
+    clearTimeout(tabTouchRef.current.timer);
+    tabTouchRef.current.timer = null;
+  };
+
   // ─── Team operations ───
   const enableTeam = async (projId) => {
     if (!synced) { setTeamErr('Sign in first to create team projects'); return; }
@@ -1036,8 +1075,11 @@ export default function App() {
                 style={{ borderBottomColor: pr.color, width: Math.max(70, editTabName.length * 9) }} />
             ) : (
               <button className={`tp-t ${activeTab === pr.id ? 'tp-t-on' : ''}`}
-                onClick={() => { if (!isTabDragging) up(p => ({ ...p, activeTab: pr.id })); }}
+                onClick={() => { if (!isTabDragging && !tabTouchRef.current.longPressed) up(p => ({ ...p, activeTab: pr.id })); tabTouchRef.current.longPressed = false; }}
                 onMouseDown={e => { if (e.button === 0) onTabDrag(e, pr.id); }}
+                onTouchStart={e => tabTouchStart(e, pr.id)}
+                onTouchMove={e => tabTouchMove(e, pr.id)}
+                onTouchEnd={tabTouchEnd}
                 onDoubleClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); }}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, pid: pr.id }); setTeamErr(''); }}
                 style={{ borderBottomColor: activeTab === pr.id ? pr.color : 'transparent', background: activeTab === pr.id ? pr.color + '0a' : 'transparent', cursor: 'grab' }}>
@@ -1062,7 +1104,7 @@ export default function App() {
         const pr = projects.find(p => p.id === contextMenu.pid); if (!pr) return null;
         const tp = pr.isTeam ? (teamProjDirect[pr.teamId] || teamProjects.find(t => t.teamId === pr.teamId) || null) : null;
         return (
-          <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 260), top: Math.min(contextMenu.y, window.innerHeight - 400) }} onClick={e => e.stopPropagation()}>
+          <div className="tp-ctx" style={{ left: Math.min(contextMenu.x, window.innerWidth - 260), top: Math.max(10, Math.min(contextMenu.y, window.innerHeight - 300)) }} onClick={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
             <button className="ctx-it" onClick={() => { setEditingTab(pr.id); setEditTabName(pr.name); setContextMenu(null); }}>✏️ Rename</button>
             <div className="ctx-cols">{TAB_COLORS.map(c => <button key={c} className="ctx-dot" style={{ background: c }} onClick={() => changeTabColor(pr.id, c)} />)}</div>
             {!pr.isTeam && (

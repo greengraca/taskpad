@@ -47,9 +47,9 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 
 /* ─── Nav ─── */
 .tp-nav { border-bottom: 1px solid var(--b); flex-shrink: 0; }
-.tp-nav-scroll { display: flex; align-items: center; overflow-x: auto; padding: 0 12px; scrollbar-width: none; }
+.tp-nav-scroll { display: flex; align-items: center; overflow-x: auto; padding: 0 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .tp-nav-scroll::-webkit-scrollbar { display: none; }
-.tp-t { background: none; border: none; border-bottom: 2px solid transparent; color: var(--td); font-family: var(--fu); font-size: 13px; font-weight: 500; padding: 10px 14px 8px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .15s, border-color .15s; user-select: none; }
+.tp-t { background: none; border: none; border-bottom: 2px solid transparent; color: var(--td); font-family: var(--fu); font-size: 13px; font-weight: 500; padding: 10px 14px 8px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .15s, border-color .15s; user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
 .tp-t:hover { color: #999; }
 .tp-t-on { color: #e8e8e8 !important; }
 .tp-td { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
@@ -112,7 +112,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-sel-bar button { background: none; border: 1px solid #38bdf833; color: #38bdf8; font-family: var(--fu); font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 4px; }
 .tp-sel-bar button:hover { background: #38bdf811; }
 
-.tp-tasks { flex: 1; overflow-y: auto; padding: 4px 16px 16px; scrollbar-width: thin; scrollbar-color: #252525 transparent; }
+.tp-tasks { flex: 1; overflow-y: auto; padding: 4px 16px 16px; scrollbar-width: thin; scrollbar-color: #252525 transparent; -webkit-overflow-scrolling: touch; }
 .tp-tasks::-webkit-scrollbar { width: 6px; }
 .tp-tasks::-webkit-scrollbar-track { background: transparent; }
 .tp-tasks::-webkit-scrollbar-thumb { background: #252525; border-radius: 3px; }
@@ -120,7 +120,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-empty:hover { color: #555; }
 
 /* ─── Tasks ─── */
-.task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; will-change: transform; }
+.task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; will-change: transform; }
 .task-row:hover { background: var(--sh); }
 .task-row.task-selected { background: #38bdf811; outline: 1px solid #38bdf833; }
 .task-done { opacity: .45; transition: opacity .15s; }
@@ -240,6 +240,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-foot { font-size: 9px; }
   .tp-hdr { padding-top: max(12px, env(safe-area-inset-top)); }
   .tp-foot { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+  /* iOS: prevent auto-zoom on input focus (requires >=16px) */
+  .task-input, .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
 }
 
 @media (display-mode: standalone) {

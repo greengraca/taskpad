@@ -36,3 +36,5 @@ src-tauri/target/release/bundle/
 
 # ---- Optional: local firebase config backups ----
 firebase-debug.log
+
+.claude
