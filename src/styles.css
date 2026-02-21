@@ -108,9 +108,12 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-pnum { font-size: 11px; color: #555; font-family: var(--fm); font-weight: 500; }
 .tp-pcl { background: none; border: 1px solid var(--bl); color: var(--td); font-family: var(--fu); font-size: 11px; cursor: pointer; padding: 3px 10px; border-radius: 6px; }
 .tp-pcl:hover { border-color: #444; color: #999; }
-.tp-sel-bar { display: flex; align-items: center; gap: 8px; padding: 4px 14px; font-size: 11px; color: #38bdf8; font-family: var(--fu); }
+.tp-sel-bar { display: flex; align-items: center; gap: 8px; padding: 4px 14px; font-size: 11px; color: #38bdf8; font-family: var(--fu); flex-wrap: wrap; }
 .tp-sel-bar button { background: none; border: 1px solid #38bdf833; color: #38bdf8; font-family: var(--fu); font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 4px; }
 .tp-sel-bar button:hover { background: #38bdf811; }
+.tp-sel-bar .sel-btn-danger { border-color: #ef444433; color: #ef4444; }
+.tp-sel-bar .sel-btn-danger:hover { background: #ef444411; }
+.sel-confirm-text { color: #ef4444; font-size: 11px; }
 
 .tp-tasks { flex: 1; overflow-y: auto; padding: 4px 16px 16px; scrollbar-width: thin; scrollbar-color: #252525 transparent; -webkit-overflow-scrolling: touch; }
 .tp-tasks::-webkit-scrollbar { width: 6px; }
@@ -240,8 +243,9 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-foot { font-size: 9px; }
   .tp-hdr { padding-top: max(12px, env(safe-area-inset-top)); }
   .tp-foot { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-  /* iOS: prevent auto-zoom on input focus (requires >=16px) */
-  .task-input, .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
+  /* iOS: prevent auto-zoom on input focus (requires >=16px). task-input excluded — it matches task-text size intentionally */
+  .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
+  .task-input { font-size: 13px; overflow: visible; }
 }
 
 @media (display-mode: standalone) {

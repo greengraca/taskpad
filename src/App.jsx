@@ -233,12 +233,13 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, onDragSelectStart, onDragSelectEnter, dragSelectRef }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, isSelecting, onDragSelectStart, onDragSelectEnter, dragSelectRef }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
   const minHRef = useRef(0);
+  const touchTimerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   useEffect(() => {
@@ -302,12 +303,16 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
 
   const handleBodyClick = (e) => {
     if (editing) return;
-    if (e.ctrlKey || e.metaKey) return; // handled in mousedown
+    if (e.ctrlKey || e.metaKey) return;
     if (!pendingClickRef.current) return;
     pendingClickRef.current = null;
-    // If drag-select was activated, don't edit — stop propagation to keep selection
     if (dragSelectRef?.current?.justEnded || dragSelectRef?.current?.active) {
       e.stopPropagation();
+      return;
+    }
+    // In selection mode (mobile), tap toggles instead of editing
+    if (isSelecting) {
+      onSelect?.(task.id, 'toggle');
       return;
     }
     if (textRef.current) {
@@ -315,6 +320,18 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     }
     setEditing(true);
   };
+
+  const handleBodyTouchStart = (e) => {
+    if (editing || isSelecting) return;
+    clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = setTimeout(() => {
+      navigator.vibrate?.(30);
+      onSelect?.(task.id, 'toggle');
+    }, 500);
+  };
+
+  const handleBodyTouchEnd = () => { clearTimeout(touchTimerRef.current); };
+  const handleBodyTouchMove = () => { clearTimeout(touchTimerRef.current); };
 
   return (
     <div className={`task-row ${task.done ? 'task-done' : ''} ${selected ? 'task-selected' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}
@@ -325,7 +342,8 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
           {task.done && <span className="chk">✓</span>}
         </div>
       </button>
-      <div className="task-body" onMouseDown={handleBodyMouseDown} onClick={handleBodyClick}>
+      <div className="task-body" onMouseDown={handleBodyMouseDown} onClick={handleBodyClick}
+        onTouchStart={handleBodyTouchStart} onTouchEnd={handleBodyTouchEnd} onTouchMove={handleBodyTouchMove}>
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text}
             style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
@@ -422,6 +440,7 @@ export default function App() {
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const dragSelectRef = useRef({ active: false, startId: null, startY: 0 });
@@ -834,6 +853,17 @@ export default function App() {
     });
   };
 
+  const deleteSelected = () => {
+    const ids = selectedIds;
+    if (isTeamTab && teamId) {
+      ids.forEach(id => deleteTeamTask({ teamId, taskId: id }).catch(() => {}));
+    } else {
+      up(p => ({ ...p, tasks: p.tasks.filter(t => !ids.has(t.id)) }));
+    }
+    setSelectedIds(new Set());
+    setDeleteConfirm(false);
+  };
+
   const clearDone = () => {
     if (isTeamTab && teamId) {
       const doneTasks = (teamTasksMap[teamId] || []).filter(t => t.done);
@@ -983,7 +1013,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.3.8</span>
+          <span className="tp-ver">v1.4.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1193,12 +1223,23 @@ export default function App() {
         )}
         {selectedIds.size > 0 && (
           <div className="tp-sel-bar">
-            <span>{selectedIds.size} selected</span>
-            <button onClick={() => {
-              const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n\n');
-              navigator.clipboard.writeText(texts).then(() => setSelectedIds(new Set())).catch(() => {});
-            }}>Copy</button>
-            <button onClick={() => setSelectedIds(new Set())}>✕</button>
+            {deleteConfirm ? (
+              <>
+                <span className="sel-confirm-text">Remove {selectedIds.size} task{selectedIds.size > 1 ? 's' : ''}?</span>
+                <button className="sel-btn-danger" onClick={deleteSelected}>Yes, remove</button>
+                <button onClick={() => setDeleteConfirm(false)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <span>{selectedIds.size} selected</span>
+                <button onClick={() => {
+                  const texts = sortedVisible.filter(t => selectedIds.has(t.id)).map(t => t.text).join('\n\n');
+                  navigator.clipboard.writeText(texts).then(() => setSelectedIds(new Set())).catch(() => {});
+                }}>Copy</button>
+                <button className="sel-btn-danger" onClick={() => setDeleteConfirm(true)}>Remove</button>
+                <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false); }}>✕</button>
+              </>
+            )}
           </div>
         )}
         <div className="tp-tasks" ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
@@ -1213,6 +1254,7 @@ export default function App() {
                   isTeam={isTeamTab} nicknames={teamProjData?.nicknames} avatars={teamProjData?.avatars}
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
+                  isSelecting={selectedIds.size > 0}
                   selected={selectedIds.has(task.id)} onSelect={onSelectTask}
                   onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
