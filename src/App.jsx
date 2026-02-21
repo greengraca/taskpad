@@ -693,6 +693,9 @@ export default function App() {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
+  // ─── Tab touch long-press (iOS context menu) ───
+  const tabTouchRef = useRef({ timer: null, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
+
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
   // ─── Task operations ───
@@ -861,8 +864,6 @@ export default function App() {
   const addKeyword = (pid, kw) => { if (!kw.trim()) return; up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: [...new Set([...(x.keywords || []), kw.trim().toLowerCase()])] } : x) })); };
   const removeKeyword = (pid, kw) => { up(p => ({ ...p, projects: p.projects.map(x => x.id === pid ? { ...x, keywords: (x.keywords || []).filter(k => k !== kw) } : x) })); };
 
-  // ─── Tab touch long-press (iOS context menu) ───
-  const tabTouchRef = useRef({ timer: null, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
   const tabTouchStart = (e, pid) => {
     const t = e.touches[0];
     const ref = tabTouchRef.current;
