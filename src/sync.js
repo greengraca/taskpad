@@ -9,6 +9,8 @@ import {
   addDoc,
   updateDoc,
   getDoc,
+  getDocs,
+  deleteDoc,
   serverTimestamp,
   arrayUnion,
   orderBy,
@@ -365,4 +367,18 @@ export const updateTeamProject = async ({ teamId, patch }) => {
 export const reconnectFirestore = () => {
   if (!isFirebaseConfigured() || !db) return;
   enableNetwork(db).catch(() => {});
+};
+
+export const deleteTeamProject = async ({ teamId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  const projRef = doc(db, 'projects', teamId);
+  const projSnap = await getDoc(projRef);
+  if (!projSnap.exists()) throw new Error('Project not found');
+  if (projSnap.data().ownerUid !== userId) throw new Error('Only the project owner can delete it');
+  // Delete all tasks in the project
+  const tasksSnap = await getDocs(query(collection(db, 'projects', teamId, 'tasks')));
+  const batch = writeBatch(db);
+  tasksSnap.docs.forEach(d => batch.delete(d.ref));
+  batch.delete(projRef);
+  await batch.commit();
 };

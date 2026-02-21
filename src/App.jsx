@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
-  subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject,
+  subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
   reconnectFirestore
 } from './sync';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
@@ -322,16 +322,28 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   };
 
   const handleBodyTouchStart = (e) => {
-    if (editing || isSelecting) return;
+    if (editing) return;
+    if (isSelecting) return; // tap-to-toggle handled in touchEnd
     clearTimeout(touchTimerRef.current);
     touchTimerRef.current = setTimeout(() => {
+      touchTimerRef.current = null;
       navigator.vibrate?.(30);
       onSelect?.(task.id, 'toggle');
     }, 500);
   };
 
-  const handleBodyTouchEnd = () => { clearTimeout(touchTimerRef.current); };
-  const handleBodyTouchMove = () => { clearTimeout(touchTimerRef.current); };
+  const handleBodyTouchEnd = (e) => {
+    if (isSelecting) {
+      e.preventDefault(); // prevent ghost click from opening edit
+      onSelect?.(task.id, 'toggle');
+      return;
+    }
+    const stillPending = !!touchTimerRef.current;
+    clearTimeout(touchTimerRef.current);
+    touchTimerRef.current = null;
+    // If it was a quick tap (timer didn't fire yet) → let the click flow handle edit
+  };
+  const handleBodyTouchMove = () => { clearTimeout(touchTimerRef.current); touchTimerRef.current = null; };
 
   return (
     <div className={`task-row ${task.done ? 'task-done' : ''} ${selected ? 'task-selected' : ''}`} ref={refCb} style={{ ...style, borderLeftColor: task.done ? '#252525' : accentColor }}
@@ -441,6 +453,7 @@ export default function App() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteConfirmPid, setDeleteConfirmPid] = useState(null);
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const dragSelectRef = useRef({ active: false, startId: null, startY: 0 });
@@ -876,7 +889,20 @@ export default function App() {
 
   // ─── Project operations ───
   const addProject = () => { const c = TAB_COLORS[projects.length % TAB_COLORS.length]; const np = { id: genId(), name: 'New Project', color: c, keywords: [] }; up(p => ({ ...p, projects: [...p.projects, np], activeTab: np.id })); setEditingTab(np.id); setEditTabName('New Project'); };
-  const deleteProject = (id) => {
+  const deleteProject = async (id) => {
+    const pr = projects.find(p => p.id === id);
+    if (pr?.isTeam && pr?.teamId) {
+      setTeamBusy(true); setTeamErr('');
+      try {
+        await deleteTeamProject({ teamId: pr.teamId });
+      } catch (e) {
+        setTeamErr(e?.message || 'Failed to delete project');
+        setTeamBusy(false);
+        setDeleteConfirmPid(null);
+        return;
+      }
+      setTeamBusy(false);
+    }
     up(p => ({
       ...p,
       projects: p.projects.filter(x => x.id !== id),
@@ -887,6 +913,7 @@ export default function App() {
       }).filter(Boolean),
       activeTab: p.activeTab === id ? INBOX_ID : p.activeTab
     }));
+    setDeleteConfirmPid(null);
     setContextMenu(null);
   };
   const finishEditTab = () => { if (!editingTab) return; const name = editTabName.trim() || 'Untitled'; up(p => ({ ...p, projects: p.projects.map(x => x.id === editingTab ? { ...x, name, keywords: [...new Set([...(x.keywords || []), name.toLowerCase()])] } : x) })); setEditingTab(null); };
@@ -1013,7 +1040,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.0</span>
+          <span className="tp-ver">v1.4.1</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1208,7 +1235,21 @@ export default function App() {
               </div>
             )}
             {teamErr && <div className="tp-modal-err" style={{ padding: '4px 12px', fontSize: 11 }}>{teamErr}</div>}
-            <button className="ctx-it ctx-del" onClick={() => deleteProject(pr.id)}>🗑 Delete project</button>
+            {(!pr.isTeam || tp?.ownerUid === authUser?.uid) && (
+              deleteConfirmPid === pr.id ? (
+                <div className="ctx-del-confirm">
+                  <span>Delete "{pr.name}"?{pr.isTeam ? ' This removes all team tasks.' : ''}</span>
+                  <div className="ctx-del-confirm-btns">
+                    <button className="ctx-it ctx-del" disabled={teamBusy} onClick={() => deleteProject(pr.id)}>
+                      {teamBusy ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button className="ctx-it" onClick={() => setDeleteConfirmPid(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="ctx-it ctx-del" onClick={() => setDeleteConfirmPid(pr.id)}>🗑 Delete project</button>
+              )
+            )}
           </div>
         );
       })()}

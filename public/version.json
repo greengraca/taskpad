@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "notes": "Mobile multi-select, remove with confirm, edit text fix",
+  "version": "1.4.1",
+  "notes": "Mobile multiselect fix, edit font fix, team delete owner-only + confirm",
   "url": ""
 }

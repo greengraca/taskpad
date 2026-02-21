@@ -65,6 +65,9 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .ctx-it:hover { background: #252525; }
 .ctx-it:disabled { opacity: 0.5; cursor: not-allowed; }
 .ctx-del { color: #ff4444 !important; }
+.ctx-del-confirm { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ctx-del-confirm span { font-size: 11px; color: #ff4444; font-family: var(--fm); line-height: 1.4; }
+.ctx-del-confirm-btns { display: flex; gap: 6px; }
 .ctx-cols { display: flex; gap: 5px; padding: 8px 12px; flex-wrap: wrap; }
 .ctx-dot { width: 18px; height: 18px; border-radius: 50%; border: none; cursor: pointer; transition: transform .1s; }
 .ctx-dot:hover { transform: scale(1.2); }
@@ -233,7 +236,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-hdr { padding: 12px 16px 8px; }
   .tp-tasks { padding: 4px 12px 12px; }
   .task-row { padding: 7px 8px; gap: 6px; }
-  .task-text { font-size: 12px; }
+  
   .sc-bar { padding: 8px 12px; }
   .sc-row { scrollbar-width: none; }
   .sc-row::-webkit-scrollbar { display: none; }
@@ -243,9 +246,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-foot { font-size: 9px; }
   .tp-hdr { padding-top: max(12px, env(safe-area-inset-top)); }
   .tp-foot { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-  /* iOS: prevent auto-zoom on input focus (requires >=16px). task-input excluded — it matches task-text size intentionally */
+  /* iOS: prevent auto-zoom on input focus (requires >=16px). Match task-text to task-input so no visual jump */
   .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
-  .task-input { font-size: 13px; overflow: visible; }
+  .task-input { font-size: 16px; overflow: visible; }
+  .task-text { font-size: 16px; }
 }
 
 @media (display-mode: standalone) {
