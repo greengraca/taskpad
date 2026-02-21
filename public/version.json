@@ -1,5 +1,5 @@
 {
-  "version": "1.4.1",
-  "notes": "Mobile multiselect fix, edit font fix, team delete owner-only + confirm",
+  "version": "1.4.2",
+  "notes": "Mobile edit font matches display, expands to show full text",
   "url": ""
 }

@@ -246,10 +246,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-foot { font-size: 9px; }
   .tp-hdr { padding-top: max(12px, env(safe-area-inset-top)); }
   .tp-foot { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
-  /* iOS: prevent auto-zoom on input focus (requires >=16px). Match task-text to task-input so no visual jump */
+  /* iOS zooms inputs < 16px on focus — accepted. Match task-input to task-text so no visual jump. overflow:visible lets it expand to show full content */
   .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
-  .task-input { font-size: 16px; overflow: visible; }
-  .task-text { font-size: 16px; }
+  .task-text { font-size: 12px; }
+  .task-input { font-size: 12px; overflow: visible; }
 }
 
 @media (display-mode: standalone) {
