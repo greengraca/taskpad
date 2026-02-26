@@ -247,11 +247,14 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Measure true content height without visible collapse:
-    // set height to 0 to get scrollHeight, then immediately set final height — single frame
+    // Measure true content height: collapse to 0 then read scrollHeight — single frame, no flicker
     el.style.height = '0px';
     const contentH = el.scrollHeight;
-    el.style.height = `${Math.max(contentH, minHRef.current)}px`;
+    // Only use minH on the very first render to prevent jump from text→textarea switch
+    const floor = minHRef.current;
+    el.style.height = `${Math.max(contentH, floor)}px`;
+    // Clear floor after first measurement so textarea can freely grow/shrink with content
+    if (floor) minHRef.current = 0;
   }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); minHRef.current = 0; };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -358,7 +361,6 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         onTouchStart={handleBodyTouchStart} onTouchEnd={handleBodyTouchEnd} onTouchMove={handleBodyTouchMove}>
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text}
-            style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
             onChange={e => { setText(e.target.value); }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
