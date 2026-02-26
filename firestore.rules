@@ -46,6 +46,11 @@ service cloud.firestore {
         allow read: if isProjectMember(projectId);
         allow create, update, delete: if isProjectMember(projectId);
       }
+
+      match /vault/{entryId} {
+        allow read: if isProjectMember(projectId);
+        allow create, update, delete: if isProjectMember(projectId);
+      }
     }
 
     match /invites/{inviteId} {

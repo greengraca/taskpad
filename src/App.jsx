@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
-  reconnectFirestore
+  reconnectFirestore,
+  initVault, subscribeVaultEntries, createVaultEntry, updateVaultEntry, deleteVaultEntry, resetVault
 } from './sync';
+import { generateSalt, toBase64, fromBase64, deriveKey, encryptEntry, decryptEntry, createVerifier, checkVerifier } from './crypto';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
 import { checkForUpdates } from './updater';
 
@@ -407,6 +409,35 @@ function InsertZone({ onClick, color }) {
   );
 }
 
+// ─── Vault entry form ───
+function VaultForm({ initial, busy, onSave, onCancel }) {
+  const [label, setLabel] = useState(initial?.label || '');
+  const [username, setUsername] = useState(initial?.username || '');
+  const [password, setPassword] = useState(initial?.password || '');
+  const [url, setUrl] = useState(initial?.url || '');
+  const [showPw, setShowPw] = useState(false);
+  const save = () => {
+    if (!label.trim() || !password.trim()) return;
+    onSave({ label: label.trim(), username: username.trim(), password: password.trim(), url: url.trim() });
+  };
+  return (
+    <div className="vault-form">
+      <input placeholder="Label *" value={label} onChange={e => setLabel(e.target.value)} autoFocus />
+      <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
+      <div className="vault-form-pw">
+        <input type={showPw ? 'text' : 'password'} placeholder="Password *" value={password} onChange={e => setPassword(e.target.value)} />
+        <button type="button" onClick={() => setShowPw(v => !v)}>{showPw ? 'Hide' : 'Show'}</button>
+      </div>
+      <input placeholder="URL" value={url} onChange={e => setUrl(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); }} />
+      <div className="vault-form-btns">
+        <button disabled={busy || !label.trim() || !password.trim()} onClick={save}>{busy ? '...' : 'Save'}</button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ───
 export default function App() {
   const [data, setData] = useState(null);
@@ -449,6 +480,18 @@ export default function App() {
   const [nickEditVal, setNickEditVal] = useState('');
   const [avatarPickUid, setAvatarPickUid] = useState(null);
   const [teamProjDirect, setTeamProjDirect] = useState({});
+
+  // Vault state
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultKey, setVaultKey] = useState(null);
+  const [vaultEntries, setVaultEntries] = useState([]);
+  const [vaultDecrypted, setVaultDecrypted] = useState([]);
+  const [vaultPwInput, setVaultPwInput] = useState('');
+  const [vaultErr, setVaultErr] = useState('');
+  const [vaultEditEntry, setVaultEditEntry] = useState(null);
+  const [vaultBusy, setVaultBusy] = useState(false);
+  const [vaultShowPw, setVaultShowPw] = useState(false);
+  const [vaultSetupMode, setVaultSetupMode] = useState(null); // 'setup' | 'changePw' | 'reset-confirm'
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -615,6 +658,55 @@ export default function App() {
     });
     return unsub;
   }, [isTeamTab, teamId]);
+
+  // Subscribe to vault entries when on a team tab with a vault
+  useEffect(() => {
+    if (!isTeamTab || !teamId || !teamProjData?.vaultSalt) {
+      setVaultEntries([]);
+      return;
+    }
+    const unsub = subscribeVaultEntries(teamId, (entries) => {
+      setVaultEntries(entries);
+    });
+    return unsub;
+  }, [isTeamTab, teamId, !!teamProjData?.vaultSalt]);
+
+  // Decrypt vault entries when key or entries change
+  useEffect(() => {
+    if (!vaultKey || vaultEntries.length === 0) {
+      setVaultDecrypted([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(vaultEntries.map(async (entry) => {
+      try {
+        const data = await decryptEntry(vaultKey, entry.encryptedData, entry.iv);
+        return { id: entry.id, ...data };
+      } catch {
+        return { id: entry.id, label: '(decryption failed)', username: '', password: '', url: '' };
+      }
+    })).then(results => {
+      if (!cancelled) setVaultDecrypted(results);
+    }).catch(() => {
+      if (!cancelled) {
+        setVaultKey(null);
+        setVaultDecrypted([]);
+        setVaultErr('Decryption failed — password may have changed. Please re-unlock.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [vaultKey, vaultEntries]);
+
+  // Clear vault state when switching away from team tab
+  useEffect(() => {
+    setVaultKey(null);
+    setVaultDecrypted([]);
+    setVaultOpen(false);
+    setVaultPwInput('');
+    setVaultErr('');
+    setVaultEditEntry(null);
+    setVaultSetupMode(null);
+  }, [teamId]);
 
   useEffect(() => {
     checkForUpdates().then(info => {
@@ -1013,6 +1105,128 @@ export default function App() {
     setAvatarPickUid(null);
   };
 
+  // ─── Vault operations ───
+  const handleVaultSetup = async (password) => {
+    if (!password || !teamId) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      const salt = generateSalt();
+      const key = await deriveKey(password, salt);
+      const { verifier, verifierIv } = await createVerifier(key);
+      await initVault({ teamId, salt: toBase64(salt), verifier, verifierIv });
+      setVaultKey(key);
+      setVaultSetupMode(null);
+      setVaultPwInput('');
+    } catch (e) {
+      setVaultErr(e?.message || 'Vault setup failed');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultUnlock = async () => {
+    if (!vaultPwInput || !teamProjData) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      const salt = fromBase64(teamProjData.vaultSalt);
+      const key = await deriveKey(vaultPwInput, salt);
+      const ok = await checkVerifier(key, teamProjData.vaultVerifier, teamProjData.vaultVerifierIv);
+      if (!ok) { setVaultErr('Wrong password'); setVaultBusy(false); return; }
+      setVaultKey(key);
+      setVaultPwInput('');
+    } catch (e) {
+      setVaultErr('Unlock failed');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultAddEntry = async (entry) => {
+    if (!vaultKey || !teamId) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      const { encryptedData, iv } = await encryptEntry(vaultKey, entry);
+      await createVaultEntry({ teamId, encryptedData, iv });
+      setVaultEditEntry(null);
+    } catch (e) {
+      setVaultErr(e?.message || 'Failed to add entry');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultUpdateEntry = async (entryId, entry) => {
+    if (!vaultKey || !teamId) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      const { encryptedData, iv } = await encryptEntry(vaultKey, entry);
+      await updateVaultEntry({ teamId, entryId, encryptedData, iv });
+      setVaultEditEntry(null);
+    } catch (e) {
+      setVaultErr(e?.message || 'Failed to update entry');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultDeleteEntry = async (entryId) => {
+    if (!teamId) return;
+    setVaultBusy(true);
+    try {
+      await deleteVaultEntry({ teamId, entryId });
+    } catch (e) {
+      setVaultErr(e?.message || 'Failed to delete entry');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultReset = async () => {
+    if (!teamId) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      await resetVault({ teamId });
+      setVaultKey(null);
+      setVaultDecrypted([]);
+      setVaultEntries([]);
+      setVaultSetupMode(null);
+    } catch (e) {
+      setVaultErr(e?.message || 'Reset failed');
+    } finally { setVaultBusy(false); }
+  };
+
+  const handleVaultChangePw = async (oldPw, newPw) => {
+    if (!teamId || !teamProjData) return;
+    setVaultBusy(true); setVaultErr('');
+    try {
+      // Verify old password
+      const oldSalt = fromBase64(teamProjData.vaultSalt);
+      const oldKey = await deriveKey(oldPw, oldSalt);
+      const ok = await checkVerifier(oldKey, teamProjData.vaultVerifier, teamProjData.vaultVerifierIv);
+      if (!ok) { setVaultErr('Current password is wrong'); setVaultBusy(false); return; }
+
+      // Decrypt all entries with old key
+      const decrypted = await Promise.all(vaultEntries.map(async (e) => {
+        const data = await decryptEntry(oldKey, e.encryptedData, e.iv);
+        return { id: e.id, data };
+      }));
+
+      // New key
+      const newSalt = generateSalt();
+      const newKey = await deriveKey(newPw, newSalt);
+      const { verifier, verifierIv } = await createVerifier(newKey);
+
+      // Re-encrypt all entries
+      const reEncrypted = await Promise.all(decrypted.map(async ({ id, data }) => {
+        const { encryptedData, iv } = await encryptEntry(newKey, data);
+        return { id, encryptedData, iv };
+      }));
+
+      // Batch write: update project doc + all vault entries
+      // Using individual writes since writeBatch is not exported from sync
+      await initVault({ teamId, salt: toBase64(newSalt), verifier, verifierIv });
+      for (const { id, encryptedData, iv } of reEncrypted) {
+        await updateVaultEntry({ teamId, entryId: id, encryptedData, iv });
+      }
+
+      setVaultKey(newKey);
+      setVaultSetupMode(null);
+      setVaultPwInput('');
+    } catch (e) {
+      setVaultErr(e?.message || 'Password change failed');
+    } finally { setVaultBusy(false); }
+  };
+
   const done = sortedVisible.filter(t => t.done).length, total = sortedVisible.length;
 
   // ─── Shortcut helpers ───
@@ -1191,6 +1405,12 @@ export default function App() {
             {pr.isTeam && (
               <div className="ctx-team-section">
                 <span className="ctx-kw-lbl">👥 Team Project</span>
+                {tp && !tp.vaultSalt && tp.ownerUid === authUser?.uid && (
+                  <button className="ctx-it" onClick={() => { setVaultSetupMode('setup'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Set Up Vault</button>
+                )}
+                {tp && tp.vaultSalt && tp.ownerUid === authUser?.uid && (
+                  <button className="ctx-it" onClick={() => { setVaultSetupMode('changePw'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Vault Settings</button>
+                )}
                 {!tp && <div className="ctx-team-note">Loading team data…</div>}
                 <div className="team-members">
                   {(tp?.memberEmails || []).map((email, i) => {
@@ -1291,6 +1511,155 @@ export default function App() {
             )}
           </div>
         )}
+        {/* Vault section — only visible for team tabs with a vault set up */}
+        {isTeamTab && teamProjData?.vaultSalt && (
+          <div className="vault-section">
+            <div className="vault-hdr" onClick={() => setVaultOpen(v => !v)}>
+              <span className="vault-hdr-l">
+                🔒 Vault
+                {vaultDecrypted.length > 0 && <span className="vault-hdr-count">{vaultDecrypted.length}</span>}
+                {vaultKey && <span style={{ fontSize: 10, color: '#4ecdc4' }}>unlocked</span>}
+              </span>
+              <span className={`vault-toggle${vaultOpen ? ' open' : ''}`}>▾</span>
+            </div>
+            {vaultOpen && (
+              <div className="vault-body">
+                {/* Unlock form */}
+                {!vaultKey && (
+                  <div className="vault-unlock">
+                    <div className="vault-unlock-row">
+                      <input type="password" placeholder="Vault password" value={vaultPwInput}
+                        onChange={e => setVaultPwInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleVaultUnlock(); }} />
+                      <button className="vault-unlock-btn" disabled={vaultBusy || !vaultPwInput} onClick={handleVaultUnlock}>
+                        {vaultBusy ? '...' : 'Unlock'}
+                      </button>
+                    </div>
+                    {vaultErr && <div className="vault-err">{vaultErr}</div>}
+                    {teamProjData?.ownerUid === authUser?.uid && (
+                      <button className="vault-forgot" onClick={() => setVaultSetupMode('reset-confirm')}>
+                        Forgot password? (owner: reset vault)
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Decrypted entries */}
+                {vaultKey && vaultDecrypted.map(entry => (
+                  vaultEditEntry?.id === entry.id ? (
+                    <VaultForm key={entry.id} initial={entry} busy={vaultBusy}
+                      onSave={(data) => handleVaultUpdateEntry(entry.id, data)}
+                      onCancel={() => setVaultEditEntry(null)} />
+                  ) : (
+                    <div key={entry.id} className="vault-entry">
+                      <div className="vault-entry-label">
+                        <span>{entry.label || '(untitled)'}</span>
+                        <div className="vault-entry-actions">
+                          <button title="Edit" onClick={() => setVaultEditEntry(entry)}>✏️</button>
+                          <button className="vault-del" title="Delete" onClick={() => handleVaultDeleteEntry(entry.id)}>🗑</button>
+                        </div>
+                      </div>
+                      {entry.username && (
+                        <div className="vault-entry-field">
+                          <span>user:</span>
+                          <span className="vault-val">{entry.username}</span>
+                          <button className="vault-copy" title="Copy username" onClick={() => navigator.clipboard.writeText(entry.username)}>📋</button>
+                        </div>
+                      )}
+                      <div className="vault-entry-field">
+                        <span>pass:</span>
+                        <span className="vault-val">••••••••••••</span>
+                        <button className="vault-copy" title="Copy password" onClick={() => navigator.clipboard.writeText(entry.password)}>📋</button>
+                      </div>
+                      {entry.url && (
+                        <div className="vault-entry-field">
+                          <span>url:</span>
+                          <span className="vault-val">{entry.url}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ))}
+
+                {/* Add entry */}
+                {vaultKey && !vaultEditEntry && (
+                  vaultEditEntry === false ? (
+                    <VaultForm busy={vaultBusy} onSave={handleVaultAddEntry} onCancel={() => setVaultEditEntry(null)} />
+                  ) : (
+                    <button className="vault-add-btn" onClick={() => setVaultEditEntry(false)}>+ Add Entry</button>
+                  )
+                )}
+                {vaultKey && vaultErr && <div className="vault-err">{vaultErr}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Vault setup/settings modal */}
+        {vaultSetupMode && (
+          <div className="tp-modal-backdrop" onMouseDown={() => { setVaultSetupMode(null); setVaultErr(''); }}>
+            <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
+              <div className="tp-modal-h">
+                <div className="tp-modal-title">
+                  {vaultSetupMode === 'setup' ? 'Set Up Vault' : vaultSetupMode === 'changePw' ? 'Vault Settings' : 'Reset Vault'}
+                </div>
+                <button className="tp-modal-x" onClick={() => { setVaultSetupMode(null); setVaultErr(''); }}>×</button>
+              </div>
+              <div className="tp-modal-body">
+                {vaultSetupMode === 'setup' && (
+                  <>
+                    <div className="vault-setup-warn">
+                      Warning: If you forget the vault password, all stored credentials will be permanently lost. There is no recovery mechanism.
+                    </div>
+                    <input className="tp-modal-in" type="password" placeholder="Choose vault password" value={vaultPwInput}
+                      onChange={e => setVaultPwInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && vaultPwInput.length >= 4) handleVaultSetup(vaultPwInput); }} />
+                    {vaultErr && <div className="tp-modal-err">{vaultErr}</div>}
+                    <button className="tp-modal-btn" disabled={vaultBusy || vaultPwInput.length < 4}
+                      onClick={() => handleVaultSetup(vaultPwInput)}>
+                      {vaultBusy ? 'Setting up...' : 'Create Vault'}
+                    </button>
+                    <div className="tp-modal-note">Minimum 4 characters. All team members will use this password to unlock.</div>
+                  </>
+                )}
+                {vaultSetupMode === 'changePw' && (
+                  <>
+                    <input className="tp-modal-in" type="password" placeholder="Current password" id="vault-old-pw" />
+                    <input className="tp-modal-in" type="password" placeholder="New password" id="vault-new-pw" />
+                    {vaultErr && <div className="tp-modal-err">{vaultErr}</div>}
+                    <button className="tp-modal-btn" disabled={vaultBusy}
+                      onClick={() => {
+                        const oldPw = document.getElementById('vault-old-pw').value;
+                        const newPw = document.getElementById('vault-new-pw').value;
+                        if (!oldPw || newPw.length < 4) { setVaultErr('New password must be at least 4 characters'); return; }
+                        handleVaultChangePw(oldPw, newPw);
+                      }}>
+                      {vaultBusy ? 'Changing...' : 'Change Password'}
+                    </button>
+                    <button className="tp-modal-btn" style={{ color: '#ff4444', borderColor: '#ff444433' }}
+                      onClick={() => setVaultSetupMode('reset-confirm')}>
+                      Reset Vault (delete all entries)
+                    </button>
+                  </>
+                )}
+                {vaultSetupMode === 'reset-confirm' && (
+                  <>
+                    <div className="vault-setup-warn" style={{ color: '#ff6b6b', background: '#ff6b6b0a', borderColor: '#ff6b6b22' }}>
+                      This will permanently delete ALL vault entries and remove the vault password. This cannot be undone.
+                    </div>
+                    {vaultErr && <div className="tp-modal-err">{vaultErr}</div>}
+                    <button className="tp-modal-btn" style={{ color: '#ff4444', borderColor: '#ff444433' }}
+                      disabled={vaultBusy} onClick={handleVaultReset}>
+                      {vaultBusy ? 'Resetting...' : 'Yes, Reset Vault'}
+                    </button>
+                    <button className="tp-modal-btn" onClick={() => setVaultSetupMode(teamProjData?.vaultSalt ? 'changePw' : null)}>Cancel</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className={`tp-tasks${isTaskDragging ? ' dragging' : ''}`} ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
           {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}

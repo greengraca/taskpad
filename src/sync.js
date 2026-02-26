@@ -57,6 +57,7 @@ let userEmail = null;
 let unsubInvites = null;
 let unsubTeamProjects = null;
 let teamTasksUnsubs = new Map();
+let vaultUnsubs = new Map();
 
 const cleanTeamListeners = () => {
   try { if (unsubInvites) unsubInvites(); } catch (e) { console.warn('Unsub invites error:', e); }
@@ -67,6 +68,10 @@ const cleanTeamListeners = () => {
     try { u(); } catch (e) { console.warn('Unsub team tasks error:', e); }
   }
   teamTasksUnsubs = new Map();
+  for (const u of vaultUnsubs.values()) {
+    try { u(); } catch (e) { console.warn('Unsub vault error:', e); }
+  }
+  vaultUnsubs = new Map();
 };
 
 export const getAuthUser = () => (userId ? { uid: userId, email: userEmail } : null);
@@ -392,5 +397,88 @@ export const deleteTeamProject = async ({ teamId }) => {
   const batch = writeBatch(db);
   tasksSnap.docs.forEach(d => batch.delete(d.ref));
   batch.delete(projRef);
+  await batch.commit();
+};
+
+// ─── Vault ───────────────────────────────────────────────────────────────────
+
+export const initVault = async ({ teamId, salt, verifier, verifierIv }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'projects', teamId), {
+    vaultSalt: salt,
+    vaultVerifier: verifier,
+    vaultVerifierIv: verifierIv,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const subscribeVaultEntries = (teamId, cb) => {
+  if (!isFirebaseConfigured() || !userId) {
+    cb([]);
+    return () => {};
+  }
+
+  if (vaultUnsubs.has(teamId)) {
+    vaultUnsubs.get(teamId)();
+    vaultUnsubs.delete(teamId);
+  }
+
+  const qy = query(collection(db, 'projects', teamId, 'vault'));
+
+  const unsub = onSnapshot(qy, (snap) => {
+    const entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    cb(entries);
+  }, (e) => {
+    console.warn('Vault listener error:', e);
+    cb([]);
+  });
+
+  vaultUnsubs.set(teamId, unsub);
+
+  return () => {
+    if (vaultUnsubs.get(teamId) === unsub) {
+      unsub();
+      vaultUnsubs.delete(teamId);
+    }
+  };
+};
+
+export const createVaultEntry = async ({ teamId, encryptedData, iv }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await addDoc(collection(db, 'projects', teamId, 'vault'), {
+    encryptedData,
+    iv,
+    createdByUid: userId,
+    createdByEmail: userEmail || null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const updateVaultEntry = async ({ teamId, entryId, encryptedData, iv }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'projects', teamId, 'vault', entryId), {
+    encryptedData,
+    iv,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const deleteVaultEntry = async ({ teamId, entryId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await deleteDoc(doc(db, 'projects', teamId, 'vault', entryId));
+};
+
+export const resetVault = async ({ teamId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  const vaultSnap = await getDocs(query(collection(db, 'projects', teamId, 'vault')));
+  const batch = writeBatch(db);
+  vaultSnap.docs.forEach(d => batch.delete(d.ref));
+  batch.update(doc(db, 'projects', teamId), {
+    vaultSalt: null,
+    vaultVerifier: null,
+    vaultVerifierIv: null,
+    updatedAt: serverTimestamp(),
+  });
   await batch.commit();
 };
