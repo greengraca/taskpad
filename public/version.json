@@ -1,5 +1,5 @@
 {
-  "version": "1.4.6",
-  "notes": "New app logo and icons",
+  "version": "1.4.7",
+  "notes": "Fix PWA icon: remove maskable so OS doesn't crop to circle",
   "url": ""
 }
