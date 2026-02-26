@@ -5,6 +5,11 @@ import App from './App';
 import './styles.css';
 
 const updateSW = registerSW({
+  onRegisteredSW(_swUrl, registration) {
+    if (registration) {
+      setInterval(() => registration.update(), 60 * 1000);
+    }
+  },
   onNeedRefresh() {
     window.dispatchEvent(new CustomEvent('sw-update-available'));
   },
