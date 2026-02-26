@@ -1,5 +1,5 @@
 {
-  "version": "1.4.3",
-  "notes": "Security: fix auth bypass in team projects, atomic invite acceptance",
+  "version": "1.4.4",
+  "notes": "Fix memory leaks: ref cleanup, team task ID cleanup, updater error handling",
   "url": ""
 }

@@ -587,6 +587,11 @@ export default function App() {
     if (teamIdsList.length === 0 || !synced) return;
     const unsubs = teamIdsList.map(tid =>
       subscribeTeamTasks(tid, (tasks) => {
+        // Clear optimistic newTeamTaskIds once real data arrives from Firestore
+        const realIds = new Set(tasks.map(t => t.id));
+        for (const id of newTeamTaskIds.current) {
+          if (realIds.has(id)) newTeamTaskIds.current.delete(id);
+        }
         setTeamTasksMap(prev => ({ ...prev, [tid]: tasks }));
       })
     );
@@ -1040,7 +1045,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.3</span>
+          <span className="tp-ver">v1.4.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1126,7 +1131,7 @@ export default function App() {
           {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
         </button>
         {projects.map(pr => (
-          <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
+          <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
             {editingTab === pr.id ? (
               <input ref={editTabRef} className="tp-t tp-t-edit" value={editTabName} onChange={e => setEditTabName(e.target.value)} onBlur={finishEditTab}
                 onKeyDown={e => { if (e.key === 'Enter') finishEditTab(); if (e.key === 'Escape') setEditingTab(null); }}
@@ -1299,7 +1304,7 @@ export default function App() {
                   selected={selectedIds.has(task.id)} onSelect={onSelectTask}
                   onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
-                  refCb={el => { if (el) taskRefs.current[task.id] = el; }} />
+                  refCb={el => { if (el) taskRefs.current[task.id] = el; else delete taskRefs.current[task.id]; }} />
                 {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} />}
               </div>
             );
@@ -1313,7 +1318,7 @@ export default function App() {
             {orderedSc.map(s => (
               <ShortcutIcon key={s.id} shortcut={s} unlocked={scUnlocked} onUnlock={() => setScUnlocked(true)}
                 onDragStart={(e, forcedX) => onScDrag(e, s.id, forcedX)} style={getScStyle(s.id)}
-                refCb={el => { if (el) scRefs.current[s.id] = el; }} />
+                refCb={el => { if (el) scRefs.current[s.id] = el; else delete scRefs.current[s.id]; }} />
             ))}
             <button className="sc-add" onClick={openShortcutAdd} title="Add shortcut">+</button>
           </div>

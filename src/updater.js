@@ -13,26 +13,30 @@ const semverCmp = (a, b) => {
 export async function checkForUpdates() {
   if (!isTauri()) return null;
 
-  const { getVersion } = await import('@tauri-apps/api/app');
+  try {
+    const { getVersion } = await import('@tauri-apps/api/app');
 
-  const currentVersion = await getVersion();
-  const url = import.meta.env.VITE_UPDATE_URL || `${window.location.origin}/version.json`;
+    const currentVersion = await getVersion();
+    const url = import.meta.env.VITE_UPDATE_URL || `${window.location.origin}/version.json`;
 
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) return null;
-  const latest = await res.json();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const latest = await res.json();
 
-  const latestVersion = latest.version;
-  const isUpdateAvailable = semverCmp(latestVersion, currentVersion) > 0;
+    const latestVersion = latest.version;
+    const isUpdateAvailable = semverCmp(latestVersion, currentVersion) > 0;
 
-  // Derive download URL: use explicit url from version.json, or strip /version.json from update URL
-  const downloadUrl = latest.url || url.replace(/\/version\.json$/, '') || '';
+    // Derive download URL: use explicit url from version.json, or strip /version.json from update URL
+    const downloadUrl = latest.url || url.replace(/\/version\.json$/, '') || '';
 
-  return {
-    isUpdateAvailable,
-    currentVersion,
-    latestVersion,
-    notes: latest.notes || '',
-    downloadUrl,
-  };
+    return {
+      isUpdateAvailable,
+      currentVersion,
+      latestVersion,
+      notes: latest.notes || '',
+      downloadUrl,
+    };
+  } catch {
+    return null;
+  }
 }
