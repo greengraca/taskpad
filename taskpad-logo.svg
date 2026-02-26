@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <clipPath id="rc">
+      <rect width="400" height="400" rx="80" ry="80"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background: warm off-white -->
+  <rect width="400" height="400" rx="80" ry="80" fill="#F5F2ED"/>
+
+  <!-- Mint accent dot — anchors the composition top-left -->
+  <circle cx="80" cy="134" r="20" fill="#3DBA8C"/>
+
+  <!-- Three bold task lines — descending lengths communicate a list draining away -->
+  <line x1="80" y1="190" x2="320" y2="190" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+  <line x1="80" y1="244" x2="248" y2="244" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+  <line x1="80" y1="298" x2="172" y2="298" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+</svg>
