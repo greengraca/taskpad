@@ -38,7 +38,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sync-dot { font-size: 12px; color: #4ecdc4; animation: spin 2s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .local-badge { font-size: 10px; font-family: var(--fm); color: var(--tm); border: 1px solid var(--bl); padding: 1px 6px; border-radius: 4px; }
-.tp-sc-toggle { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.tp-sc-toggle { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; width: 32px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; }
 .tp-sc-toggle:hover { border-color: #333; color: #888; }
 .tp-sc-toggle:focus-visible, .invite-bell:focus-visible, .tp-t:focus-visible, .ctx-it:focus-visible { outline: 1px solid #38bdf8; outline-offset: 2px; }
 
@@ -257,7 +257,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .vault-form-btns button:hover { background: #1a1a1a; border-color: #3a3a3a; }
 .vault-form-btns button:disabled { opacity: 0.5; cursor: not-allowed; }
 .vault-setup-warn { font-size: 10px; color: #f59e0b; font-family: var(--fm); line-height: 1.4; padding: 6px 8px; background: #f59e0b0a; border: 1px solid #f59e0b22; border-radius: 6px; }
-.vault-eye-btn { background: none; border: 1px solid #252525; color: #666; font-size: 14px; padding: 6px 10px; border-radius: 10px; cursor: pointer; line-height: 1; }
+.vault-eye-btn { background: none; border: 1px solid #252525; color: #666; font-size: 14px; width: 36px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; cursor: pointer; padding: 0; }
 .vault-eye-btn:hover { border-color: #333; color: #aaa; }
 .vault-link { color: #38bdf8; text-decoration: none; }
 .vault-link:hover { text-decoration: underline; color: #60a5fa; }
