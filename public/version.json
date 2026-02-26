@@ -1,5 +1,5 @@
 {
-  "version": "1.5.6",
-  "notes": "Fix toggle button dimensions",
+  "version": "1.5.7",
+  "notes": "Toggle icon fixes, PWA refresh fix, mobile banner",
   "url": ""
 }

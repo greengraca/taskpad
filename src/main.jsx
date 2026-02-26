@@ -23,8 +23,8 @@ const updateSW = registerSW({
   onOfflineReady() {},
 });
 
-window.__swUpdate = () => {
-  updateSW(true);
+window.__swUpdate = async () => {
+  await updateSW(true);
   window.location.reload();
 };
 

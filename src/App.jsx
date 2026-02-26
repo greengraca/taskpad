@@ -1253,7 +1253,7 @@ export default function App() {
       )}
       {swUpdate && (
         <div className="update-banner">
-          <span>v{swUpdate.version || 'new'} available — Refresh to get new features</span>
+          <span>v{swUpdate.version || 'new'} available<span className="update-sub"> — Refresh to get new features</span></span>
           <div className="update-actions">
             <button className="update-dl" onClick={() => window.__swUpdate?.()}>Refresh</button>
             <button className="update-x" onClick={() => setSwUpdate(null)}>×</button>
@@ -1264,7 +1264,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.5.6</span>
+          <span className="tp-ver">v1.5.7</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1280,7 +1280,7 @@ export default function App() {
             </button>
           )}
         </div>
-        <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}>{data.showSc ? '◫' : '◻'}</button>
+        <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{data.showSc ? <><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="8" y1="1" x2="8" y2="15"/></> : <rect x="1" y="1" width="14" height="14" rx="2"/>}</svg></button>
       </header>
 
       {/* Auth modal */}
@@ -1616,7 +1616,7 @@ export default function App() {
                     <div className="vault-form-pw">
                       <input className="tp-modal-in" type={vaultShowPw ? 'text' : 'password'} placeholder="Choose vault password" value={vaultPwInput}
                         onChange={e => setVaultPwInput(e.target.value)} />
-                      <button type="button" className="vault-eye-btn" onClick={() => setVaultShowPw(v => !v)}>{vaultShowPw ? '🙈' : '👁'}</button>
+                      <button type="button" className="vault-eye-btn" onClick={() => setVaultShowPw(v => !v)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{vaultShowPw ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></> : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
                     </div>
                     <input className="tp-modal-in" type={vaultShowPw ? 'text' : 'password'} placeholder="Confirm password" id="vault-confirm-pw"
                       onKeyDown={e => { if (e.key === 'Enter' && vaultPwInput.length >= 4) {
