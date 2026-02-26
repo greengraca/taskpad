@@ -10,7 +10,7 @@ service cloud.firestore {
 
     function isProjectMember(projectId) {
       let proj = get(/databases/$(database)/documents/projects/$(projectId)).data;
-      return isSignedIn() && (
+      return isSignedIn() && proj != null && (
         request.auth.uid == proj.ownerUid ||
         request.auth.uid in proj.memberUids
       );
@@ -25,15 +25,19 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
 
-      // Owner can update anything; members can update nicknames, avatars
-      // Invited users can join (add themselves to memberUids/memberEmails/nicknames)
+      // Owner can update anything
+      // Members can update only nicknames and avatars
+      // Non-members can join ONLY by adding their own UID (invite acceptance)
+      //   — must not remove existing members, must only add self
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.ownerUid ||
         (request.auth.uid in resource.data.memberUids &&
          request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['nicknames', 'avatars', 'updatedAt'])) ||
-        request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['memberUids', 'memberEmails', 'nicknames', 'updatedAt'])
+        (request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['memberUids', 'memberEmails', 'nicknames', 'updatedAt']) &&
+         request.auth.uid in request.resource.data.memberUids &&
+         request.resource.data.memberUids.hasAll(resource.data.memberUids))
       );
 
       allow delete: if false;

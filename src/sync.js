@@ -59,9 +59,13 @@ let unsubTeamProjects = null;
 let teamTasksUnsubs = new Map();
 
 const cleanTeamListeners = () => {
-  if (unsubInvites) { unsubInvites(); unsubInvites = null; }
-  if (unsubTeamProjects) { unsubTeamProjects(); unsubTeamProjects = null; }
-  for (const u of teamTasksUnsubs.values()) u();
+  try { if (unsubInvites) unsubInvites(); } catch (e) { console.warn('Unsub invites error:', e); }
+  unsubInvites = null;
+  try { if (unsubTeamProjects) unsubTeamProjects(); } catch (e) { console.warn('Unsub team projects error:', e); }
+  unsubTeamProjects = null;
+  for (const u of teamTasksUnsubs.values()) {
+    try { u(); } catch (e) { console.warn('Unsub team tasks error:', e); }
+  }
   teamTasksUnsubs = new Map();
 };
 
@@ -186,7 +190,7 @@ export const sendTeamInvite = async ({ teamId, toEmail }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in to invite');
 
   const email = (toEmail || '').trim().toLowerCase();
-  if (!email.includes('@')) throw new Error('Valid email required');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Valid email required');
 
   // Fetch project name to include in invite
   const projSnap = await getDoc(doc(db, 'projects', teamId));
@@ -211,22 +215,11 @@ export const acceptTeamInvite = async ({ inviteId }) => {
   if (!invSnap.exists()) throw new Error('Invite not found');
 
   const inv = invSnap.data();
+  if (inv.status !== 'pending') throw new Error('Invite already processed');
   if (inv.toEmail && userEmail && inv.toEmail.toLowerCase() !== userEmail.toLowerCase())
     throw new Error('Invite does not match this account');
 
-  // Update project to add this user as member
   const projRef = doc(db, 'projects', inv.projectId);
-  const patch = {
-    memberUids: arrayUnion(userId),
-    updatedAt: serverTimestamp(),
-  };
-  if (userEmail) patch.memberEmails = arrayUnion(userEmail);
-  patch[`nicknames.${userId}`] = userEmail ? userEmail.split('@')[0] : 'me';
-
-  await updateDoc(projRef, patch);
-  await updateDoc(invRef, { status: 'accepted', acceptedAt: serverTimestamp() });
-
-  // Add a tab reference in user's taskpad doc
   const userRef = doc(db, 'users', userId);
   const userSnap = await getDoc(userRef);
   const existing = userSnap.exists() ? (userSnap.data().taskpad || null) : null;
@@ -235,6 +228,19 @@ export const acceptTeamInvite = async ({ inviteId }) => {
   const tabId = `t_${inv.projectId}`;
   const already = Array.isArray(local.projects) && local.projects.some(p => p.id === tabId);
 
+  // Batch all writes atomically
+  const batch = writeBatch(db);
+
+  // Add this user as project member
+  const projPatch = { memberUids: arrayUnion(userId), updatedAt: serverTimestamp() };
+  if (userEmail) projPatch.memberEmails = arrayUnion(userEmail);
+  projPatch[`nicknames.${userId}`] = userEmail ? userEmail.split('@')[0] : 'me';
+  batch.update(projRef, projPatch);
+
+  // Mark invite as accepted
+  batch.update(invRef, { status: 'accepted', acceptedAt: serverTimestamp() });
+
+  // Add tab to user's taskpad
   if (!already) {
     const next = {
       ...local,
@@ -250,9 +256,11 @@ export const acceptTeamInvite = async ({ inviteId }) => {
         }
       ],
     };
-    await setDoc(userRef, { taskpad: next }, { merge: true });
+    batch.set(userRef, { taskpad: next }, { merge: true });
     saveLocal(next);
   }
+
+  await batch.commit();
 };
 
 export const declineTeamInvite = async ({ inviteId }) => {
