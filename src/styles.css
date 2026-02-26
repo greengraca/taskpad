@@ -286,6 +286,9 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-modal-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .tp-modal-note { font-size: 11px; color: #666; font-family: var(--fm); line-height: 1.4; }
 .tp-modal-err { font-size: 11px; color: #ff6b6b; font-family: var(--fm); }
+.tp-modal-input { width: 100%; background: #0b0b0b; border: 1px solid #252525; border-radius: 6px; padding: 7px 10px; color: var(--t); font-family: var(--fm); font-size: 12px; outline: none; box-sizing: border-box; }
+.tp-modal-input:focus { border-color: #38bdf8; }
+.vault-confirm-label { font-size: 11px; color: #888; font-family: var(--fm); }
 
 @media (max-width: 600px) {
   .tp-hdr { padding: 12px 16px 8px; }

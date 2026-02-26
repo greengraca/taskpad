@@ -484,6 +484,7 @@ export default function App() {
   const [vaultBusy, setVaultBusy] = useState(false);
   const [vaultShowPw, setVaultShowPw] = useState(false);
   const [vaultSetupMode, setVaultSetupMode] = useState(null); // 'setup' | 'changePw' | 'reset-confirm'
+  const [vaultResetConfirm, setVaultResetConfirm] = useState('');
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -1263,7 +1264,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.5.3</span>
+          <span className="tp-ver">v1.5.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1538,7 +1539,7 @@ export default function App() {
                     </div>
                     {vaultErr && <div className="vault-err">{vaultErr}</div>}
                     {teamProjData?.ownerUid === authUser?.uid && (
-                      <button className="vault-forgot" onClick={() => setVaultSetupMode('reset-confirm')}>
+                      <button className="vault-forgot" onClick={() => { setVaultResetConfirm(''); setVaultSetupMode('reset-confirm'); }}>
                         Forgot password? (owner: reset vault)
                       </button>
                     )}
@@ -1650,7 +1651,7 @@ export default function App() {
                       {vaultBusy ? 'Changing...' : 'Change Password'}
                     </button>
                     <button className="tp-modal-btn" style={{ color: '#ff4444', borderColor: '#ff444433' }}
-                      onClick={() => setVaultSetupMode('reset-confirm')}>
+                      onClick={() => { setVaultResetConfirm(''); setVaultSetupMode('reset-confirm'); }}>
                       Reset Vault (delete all entries)
                     </button>
                   </>
@@ -1660,12 +1661,15 @@ export default function App() {
                     <div className="vault-setup-warn" style={{ color: '#ff6b6b', background: '#ff6b6b0a', borderColor: '#ff6b6b22' }}>
                       This will permanently delete ALL vault entries and remove the vault password. This cannot be undone.
                     </div>
+                    <label className="vault-confirm-label">Type <strong>RESET</strong> to confirm</label>
+                    <input className="tp-modal-input" placeholder="RESET" value={vaultResetConfirm}
+                      onChange={e => setVaultResetConfirm(e.target.value)} autoFocus />
                     {vaultErr && <div className="tp-modal-err">{vaultErr}</div>}
                     <button className="tp-modal-btn" style={{ color: '#ff4444', borderColor: '#ff444433' }}
-                      disabled={vaultBusy} onClick={handleVaultReset}>
+                      disabled={vaultBusy || vaultResetConfirm !== 'RESET'} onClick={handleVaultReset}>
                       {vaultBusy ? 'Resetting...' : 'Yes, Reset Vault'}
                     </button>
-                    <button className="tp-modal-btn" onClick={() => setVaultSetupMode(teamProjData?.vaultSalt ? 'changePw' : null)}>Cancel</button>
+                    <button className="tp-modal-btn" onClick={() => { setVaultSetupMode(teamProjData?.vaultSalt ? 'changePw' : null); setVaultResetConfirm(''); }}>Cancel</button>
                   </>
                 )}
               </div>
