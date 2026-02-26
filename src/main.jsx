@@ -23,9 +23,14 @@ const updateSW = registerSW({
   onOfflineReady() {},
 });
 
-window.__swUpdate = async () => {
-  await updateSW(true);
-  window.location.reload();
+window.__swUpdate = () => {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+  updateSW(true);
 };
 
 createRoot(document.getElementById('root')).render(
