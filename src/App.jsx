@@ -247,12 +247,10 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   useEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Temporarily remove constraints to measure true content height
-    const savedMin = el.style.minHeight;
-    el.style.minHeight = '0px';
-    el.style.height = 'auto';
+    // Measure true content height without visible collapse:
+    // set height to 0 to get scrollHeight, then immediately set final height — single frame
+    el.style.height = '0px';
     const contentH = el.scrollHeight;
-    el.style.minHeight = savedMin;
     el.style.height = `${Math.max(contentH, minHRef.current)}px`;
   }, [editing, text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); minHRef.current = 0; };
@@ -361,7 +359,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={1} value={text}
             style={{ minHeight: minHRef.current ? `${minHRef.current}px` : undefined }}
-            onChange={e => { setText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, minHRef.current)}px`; }} onBlur={commit}
+            onChange={e => { setText(e.target.value); }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
