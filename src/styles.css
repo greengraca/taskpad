@@ -25,7 +25,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .update-banner { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #1a2332; border-bottom: 1px solid #38bdf833; flex-shrink: 0; gap: 12px; }
 .update-banner span { font-size: 12px; font-family: var(--fm); color: #38bdf8; }
 .update-actions { display: flex; align-items: center; gap: 8px; }
-.update-dl { font-size: 11px; font-family: var(--fm); color: #38bdf8; border: 1px solid #38bdf844; padding: 3px 10px; border-radius: 6px; text-decoration: none; }
+.update-dl { font-size: 11px; font-family: var(--fm); color: #38bdf8; border: 1px solid #38bdf844; padding: 3px 10px; border-radius: 6px; text-decoration: none; background: none; cursor: pointer; }
 .update-dl:hover { background: #38bdf811; border-color: #38bdf8; }
 .update-x { background: none; border: none; color: #555; font-size: 16px; cursor: pointer; padding: 0 4px; }
 .update-x:hover { color: #999; }

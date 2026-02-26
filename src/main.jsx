@@ -11,12 +11,22 @@ const updateSW = registerSW({
     }
   },
   onNeedRefresh() {
-    window.dispatchEvent(new CustomEvent('sw-update-available'));
+    fetch('/version.json?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        window.dispatchEvent(new CustomEvent('sw-update-available', { detail: { version: data.version } }));
+      })
+      .catch(() => {
+        window.dispatchEvent(new CustomEvent('sw-update-available', { detail: {} }));
+      });
   },
   onOfflineReady() {},
 });
 
-window.__swUpdate = () => updateSW(true);
+window.__swUpdate = () => {
+  updateSW(true);
+  window.location.reload();
+};
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
