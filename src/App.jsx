@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
@@ -243,13 +243,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const touchTimerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
-  useLayoutEffect(() => {
-    if (!editing || !inputRef.current) return;
-    const el = inputRef.current;
-    // height:auto lets the textarea collapse to rows=1 so scrollHeight reports true content height
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [editing, text]);
+  const rowCount = Math.max(1, (text || '').split('\n').length);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
@@ -351,7 +345,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
       <div className="task-body" onMouseDown={handleBodyMouseDown} onClick={handleBodyClick}
         onTouchStart={handleBodyTouchStart} onTouchEnd={handleBodyTouchEnd} onTouchMove={handleBodyTouchMove}>
         {editing ? (
-          <textarea ref={inputRef} className="task-input" rows={1} value={text}
+          <textarea ref={inputRef} className="task-input" rows={rowCount} value={text}
             onChange={e => { setText(e.target.value); }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
@@ -1253,7 +1247,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.8</span>
+          <span className="tp-ver">v1.4.9</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
