@@ -451,6 +451,13 @@ export default function App() {
 
   // Update popup
   const [updateInfo, setUpdateInfo] = useState(null);
+  const [swUpdate, setSwUpdate] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setSwUpdate(true);
+    window.addEventListener('sw-update-available', handler);
+    return () => window.removeEventListener('sw-update-available', handler);
+  }, []);
 
   // Team state
   const [invites, setInvites] = useState([]);
@@ -1243,11 +1250,20 @@ export default function App() {
           </div>
         </div>
       )}
+      {swUpdate && (
+        <div className="update-banner">
+          <span>A new version is available</span>
+          <div className="update-actions">
+            <button className="update-dl" onClick={() => window.__swUpdate?.()}>Refresh</button>
+            <button className="update-x" onClick={() => setSwUpdate(false)}>×</button>
+          </div>
+        </div>
+      )}
 
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.9</span>
+          <span className="tp-ver">v1.5.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
