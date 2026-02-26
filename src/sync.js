@@ -72,6 +72,7 @@ const cleanTeamListeners = () => {
 export const getAuthUser = () => (userId ? { uid: userId, email: userEmail } : null);
 
 export const initSync = (onDataUpdate, onSyncStatus, onInvitesUpdate, onTeamProjectsUpdate) => {
+  _onSyncStatus = onSyncStatus;
   onDataUpdate(loadLocal());
 
   if (!isFirebaseConfigured()) {
@@ -149,6 +150,8 @@ export const initSync = (onDataUpdate, onSyncStatus, onInvitesUpdate, onTeamProj
   });
 };
 
+let _onSyncStatus = null;
+
 export const saveToCloud = async (data) => {
   saveLocal(data);
   if (!isFirebaseConfigured() || !userId) return;
@@ -158,6 +161,7 @@ export const saveToCloud = async (data) => {
     await setDoc(docRef, { taskpad: data }, { merge: true });
   } catch (e) {
     console.warn('Cloud save failed:', e);
+    _onSyncStatus?.({ syncError: true, error: e.message });
   }
 };
 

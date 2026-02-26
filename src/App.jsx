@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
@@ -459,6 +459,14 @@ export default function App() {
   const dragSelectRef = useRef({ active: false, startId: null, startY: 0 });
 
   const projects = data?.projects || EMPTY;
+  // Precompile project detection regexes (only recomputed when projects change)
+  const projectPatterns = useMemo(() => projects.filter(p => !p.isTeam).map(p => ({
+    id: p.id,
+    patterns: [
+      new RegExp('(?:^|\\W)' + escRe(p.name.toLowerCase()) + '(?:$|\\W)', 'i'),
+      ...(p.keywords || []).map(k => new RegExp('(?:^|\\W)' + escRe(k.toLowerCase()) + '(?:$|\\W)', 'i')),
+    ],
+  })), [projects]);
   const tasks = data?.tasks || EMPTY;
   const activeTab = data?.activeTab || INBOX_ID;
   const isInbox = activeTab === INBOX_ID;
@@ -493,7 +501,8 @@ export default function App() {
 
   const shortcuts = data?.shortcuts?.length ? data.shortcuts : DEFAULT_SHORTCUTS;
   const scIds = (data?.scOrder?.length ? data.scOrder : shortcuts.map(s => s.id));
-  const orderedSc = scIds.map(id => shortcuts.find(s => s.id === id)).filter(Boolean);
+  const scMap = new Map(shortcuts.map(s => [s.id, s]));
+  const orderedSc = scIds.map(id => scMap.get(id)).filter(Boolean);
 
   const up = useCallback((fn) => {
     setData(prev => {
@@ -738,14 +747,8 @@ export default function App() {
   // ─── Task operations ───
   const detectProject = (text) => {
     const low = text.toLowerCase();
-    for (const p of projects) {
-      if (p.isTeam) continue;
-      const nameRe = new RegExp('(?:^|\\W)' + escRe(p.name.toLowerCase()) + '(?:$|\\W)', 'i');
-      if (nameRe.test(low)) return p.id;
-      if (p.keywords?.some(k => {
-        const kwRe = new RegExp('(?:^|\\W)' + escRe(k.toLowerCase()) + '(?:$|\\W)', 'i');
-        return kwRe.test(low);
-      })) return p.id;
+    for (const { id, patterns } of projectPatterns) {
+      if (patterns.some(re => re.test(low))) return id;
     }
     return null;
   };
@@ -1045,7 +1048,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.4</span>
+          <span className="tp-ver">v1.4.5</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1288,7 +1291,7 @@ export default function App() {
             )}
           </div>
         )}
-        <div className="tp-tasks" ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
+        <div className={`tp-tasks${isTaskDragging ? ' dragging' : ''}`} ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
           {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}
           {sortedVisible.map((task, idx) => {

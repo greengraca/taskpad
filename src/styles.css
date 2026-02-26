@@ -13,6 +13,7 @@
 html, body, #root { height: 100%; overflow: hidden; }
 body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-font-smoothing: antialiased; }
 
+* { scrollbar-width: thin; scrollbar-color: #252525 transparent; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #252525; border-radius: 3px; }
@@ -39,6 +40,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .local-badge { font-size: 10px; font-family: var(--fm); color: var(--tm); border: 1px solid var(--bl); padding: 1px 6px; border-radius: 4px; }
 .tp-sc-toggle { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .tp-sc-toggle:hover { border-color: #333; color: #888; }
+.tp-sc-toggle:focus-visible, .invite-bell:focus-visible, .tp-t:focus-visible, .ctx-it:focus-visible { outline: 1px solid #38bdf8; outline-offset: 2px; }
 
 /* ─── Invite bell ─── */
 .invite-bell { background: none; border: 1px solid #fbbf2444; color: #fbbf24; font-size: 12px; padding: 2px 8px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
@@ -51,7 +53,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-nav-scroll::-webkit-scrollbar { display: none; }
 .tp-t { background: none; border: none; border-bottom: 2px solid transparent; color: var(--td); font-family: var(--fu); font-size: 13px; font-weight: 500; padding: 10px 14px 8px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .15s, border-color .15s; user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
 .tp-t:hover { color: #999; }
-.tp-t-on { color: #e8e8e8 !important; }
+.tp-t.tp-t-on, .tp-t.tp-t-on:hover { color: #e8e8e8; }
 .tp-td { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .tp-tc { font-size: 10px; font-weight: 600; color: #888; background: var(--b); padding: 1px 6px; border-radius: 8px; }
 .tp-t-edit { color: #e8e8e8; background: #141414; outline: none; border-radius: 0; }
@@ -64,7 +66,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .ctx-it { display: block; width: 100%; background: none; border: none; color: #ccc; font-family: var(--fu); font-size: 13px; padding: 8px 12px; cursor: pointer; text-align: left; border-radius: 6px; }
 .ctx-it:hover { background: #252525; }
 .ctx-it:disabled { opacity: 0.5; cursor: not-allowed; }
-.ctx-del { color: #ff4444 !important; }
+.ctx-it.ctx-del { color: #ff4444; }
 .ctx-del-confirm { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 .ctx-del-confirm span { font-size: 11px; color: #ff4444; font-family: var(--fm); line-height: 1.4; }
 .ctx-del-confirm-btns { display: flex; gap: 6px; }
@@ -78,6 +80,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .kw-pill button { background: none; border: none; color: #555; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
 .kw-pill button:hover { color: #ff4444; }
 .kw-in { width: 100%; background: #141414; border: 1px solid #252525; border-radius: 4px; padding: 5px 8px; color: var(--t); font-family: var(--fm); font-size: 11px; outline: none; }
+.kw-in:focus-visible { border-color: #38bdf8; }
 .kw-in::placeholder { color: #444; }
 
 /* ─── Team section in context menu ─── */
@@ -126,7 +129,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-empty:hover { color: #555; }
 
 /* ─── Tasks ─── */
-.task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; will-change: transform; }
+.task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--s); user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
+.tp-tasks.dragging .task-row { will-change: transform; }
 .task-row:hover { background: var(--sh); }
 .task-row.task-selected { background: #38bdf811; outline: 1px solid #38bdf833; }
 .task-done { opacity: .45; transition: opacity .15s; }
@@ -154,9 +158,9 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .task-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; align-self: center; }
 .hide-btn, .del-btn { display: none; background: none; border: none; color: #444; cursor: pointer; padding: 4px; line-height: 0; border-radius: 4px; transition: color .15s; align-items: center; justify-content: center; }
 .task-row:hover .hide-btn, .task-row:hover .del-btn { display: flex; }
-.hide-btn:hover { color: #888 !important; }
+.hide-btn:hover { color: #888; }
 .hide-btn svg { display: block; }
-.del-btn:hover { color: #ff4444 !important; }
+.del-btn:hover { color: #ff4444; }
 .del-btn svg { display: block; }
 
 /* ─── Insert zone ─── */
@@ -171,7 +175,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .sc-row::-webkit-scrollbar-track { background: transparent; }
 .sc-row::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 .sc-row::-webkit-scrollbar-thumb:hover { background: #555; }
-.sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; will-change: transform; touch-action: pan-x pan-y; }
+.sc-wrap { flex-shrink: 0; position: relative; width: 36px; height: 36px; touch-action: pan-x pan-y; }
+.sc-bar.dragging .sc-wrap { will-change: transform; }
 .sc-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--s); border: 1px solid var(--bl); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color .15s, background .15s; }
 .sc-icon:hover { background: #1a1a1a; border-color: #333; }
 .sc-icon img { border-radius: 3px; pointer-events: none; }
