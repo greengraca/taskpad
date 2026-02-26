@@ -1264,7 +1264,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.5.7</span>
+          <span className="tp-ver">v1.5.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1407,12 +1407,6 @@ export default function App() {
             {pr.isTeam && (
               <div className="ctx-team-section">
                 <span className="ctx-kw-lbl">👥 Team Project</span>
-                {tp && !tp.vaultSalt && tp.ownerUid === authUser?.uid && (
-                  <button className="ctx-it" onClick={() => { setVaultSetupMode('setup'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Set Up Vault</button>
-                )}
-                {tp && tp.vaultSalt && tp.ownerUid === authUser?.uid && (
-                  <button className="ctx-it" onClick={() => { setVaultSetupMode('changePw'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Vault Settings</button>
-                )}
                 {!tp && <div className="ctx-team-note">Loading team data…</div>}
                 <div className="team-members">
                   {(tp?.memberEmails || []).map((email, i) => {
@@ -1462,6 +1456,12 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                {tp && !tp.vaultSalt && tp.ownerUid === authUser?.uid && (
+                  <button className="ctx-it" onClick={() => { setVaultSetupMode('setup'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Set Up Vault</button>
+                )}
+                {tp && tp.vaultSalt && tp.ownerUid === authUser?.uid && (
+                  <button className="ctx-it" onClick={() => { setVaultSetupMode('changePw'); setVaultPwInput(''); setVaultErr(''); setContextMenu(null); }}>🔒 Vault Settings</button>
+                )}
               </div>
             )}
             {teamErr && <div className="tp-modal-err" style={{ padding: '4px 12px', fontSize: 11 }}>{teamErr}</div>}

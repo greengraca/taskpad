@@ -1,5 +1,5 @@
 {
-  "version": "1.5.7",
-  "notes": "Toggle icon fixes, PWA refresh fix, mobile banner",
+  "version": "1.5.8",
+  "notes": "Move vault settings below invite input",
   "url": ""
 }
