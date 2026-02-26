@@ -1574,7 +1574,7 @@ export default function App() {
                       {entry.url && (
                         <div className="vault-entry-field">
                           <span>url:</span>
-                          <span className="vault-val">{entry.url}</span>
+                          <a className="vault-val vault-link" href={entry.url.startsWith('http') ? entry.url : `https://${entry.url}`} target="_blank" rel="noopener noreferrer">{entry.url}</a>
                         </div>
                       )}
                     </div>
@@ -1611,12 +1611,24 @@ export default function App() {
                     <div className="vault-setup-warn">
                       Warning: If you forget the vault password, all stored credentials will be permanently lost. There is no recovery mechanism.
                     </div>
-                    <input className="tp-modal-in" type="password" placeholder="Choose vault password" value={vaultPwInput}
-                      onChange={e => setVaultPwInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && vaultPwInput.length >= 4) handleVaultSetup(vaultPwInput); }} />
+                    <div className="vault-form-pw">
+                      <input className="tp-modal-in" type={vaultShowPw ? 'text' : 'password'} placeholder="Choose vault password" value={vaultPwInput}
+                        onChange={e => setVaultPwInput(e.target.value)} />
+                      <button type="button" className="vault-eye-btn" onClick={() => setVaultShowPw(v => !v)}>{vaultShowPw ? '🙈' : '👁'}</button>
+                    </div>
+                    <input className="tp-modal-in" type={vaultShowPw ? 'text' : 'password'} placeholder="Confirm password" id="vault-confirm-pw"
+                      onKeyDown={e => { if (e.key === 'Enter' && vaultPwInput.length >= 4) {
+                        const confirm = document.getElementById('vault-confirm-pw').value;
+                        if (confirm !== vaultPwInput) { setVaultErr('Passwords do not match'); return; }
+                        handleVaultSetup(vaultPwInput);
+                      }}} />
                     {vaultErr && <div className="tp-modal-err">{vaultErr}</div>}
                     <button className="tp-modal-btn" disabled={vaultBusy || vaultPwInput.length < 4}
-                      onClick={() => handleVaultSetup(vaultPwInput)}>
+                      onClick={() => {
+                        const confirm = document.getElementById('vault-confirm-pw').value;
+                        if (confirm !== vaultPwInput) { setVaultErr('Passwords do not match'); return; }
+                        handleVaultSetup(vaultPwInput);
+                      }}>
                       {vaultBusy ? 'Setting up...' : 'Create Vault'}
                     </button>
                     <div className="tp-modal-note">Minimum 4 characters. All team members will use this password to unlock.</div>

@@ -257,6 +257,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .vault-form-btns button:hover { background: #1a1a1a; border-color: #3a3a3a; }
 .vault-form-btns button:disabled { opacity: 0.5; cursor: not-allowed; }
 .vault-setup-warn { font-size: 10px; color: #f59e0b; font-family: var(--fm); line-height: 1.4; padding: 6px 8px; background: #f59e0b0a; border: 1px solid #f59e0b22; border-radius: 6px; }
+.vault-eye-btn { background: none; border: 1px solid #252525; color: #666; font-size: 14px; padding: 6px 10px; border-radius: 10px; cursor: pointer; line-height: 1; }
+.vault-eye-btn:hover { border-color: #333; color: #aaa; }
+.vault-link { color: #38bdf8; text-decoration: none; }
+.vault-link:hover { text-decoration: underline; color: #60a5fa; }
 
 /* ─── Footer ─── */
 .tp-foot { padding: 6px 16px 8px; font-size: 10px; color: #222; font-family: var(--fm); text-align: center; flex-shrink: 0; }
@@ -298,7 +302,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .tp-hdr { padding-top: max(12px, env(safe-area-inset-top)); }
   .tp-foot { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
   /* iOS zooms inputs < 16px on focus — accepted. Match task-input to task-text so no visual jump. overflow:visible lets it expand to show full content */
-  .kw-in, .tp-t-edit, .tp-modal input { font-size: 16px; }
+  .kw-in, .tp-modal input { font-size: 16px; }
+  .tp-t-edit { font-size: 13px; }
   .task-text { font-size: 12px; }
   .task-input { font-size: 12px; overflow: visible; }
 }
