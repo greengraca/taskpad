@@ -1,5 +1,5 @@
 {
-  "version": "1.4.7",
-  "notes": "Fix PWA icon: remove maskable so OS doesn't crop to circle",
+  "version": "1.4.8",
+  "notes": "Encrypted vault for team projects, textarea resize fixes",
   "url": ""
 }

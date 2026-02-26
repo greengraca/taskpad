@@ -240,23 +240,17 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
-  const minHRef = useRef(0);
   const touchTimerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   useLayoutEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Measure true content height before browser paints — no visible collapse
-    el.style.height = '0px';
-    const contentH = el.scrollHeight;
-    // Use minH only on the very first render to prevent jump from text→textarea switch
-    const floor = minHRef.current;
-    el.style.height = `${Math.max(contentH, floor)}px`;
-    // Clear floor after first measurement so textarea can freely grow/shrink with content
-    if (floor) minHRef.current = 0;
+    // height:auto lets the textarea collapse to rows=1 so scrollHeight reports true content height
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
   }, [editing, text]);
-  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); minHRef.current = 0; };
+  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
   // Author info with avatar
@@ -317,9 +311,6 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     if (isSelecting) {
       onSelect?.(task.id, 'toggle');
       return;
-    }
-    if (textRef.current) {
-      minHRef.current = textRef.current.offsetHeight;
     }
     setEditing(true);
   };
@@ -1262,7 +1253,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.4.7</span>
+          <span className="tp-ver">v1.4.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
