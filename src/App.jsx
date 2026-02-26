@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { initSync, saveToCloud, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
@@ -244,13 +244,13 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const touchTimerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!editing || !inputRef.current) return;
     const el = inputRef.current;
-    // Measure true content height: collapse to 0 then read scrollHeight — single frame, no flicker
+    // Measure true content height before browser paints — no visible collapse
     el.style.height = '0px';
     const contentH = el.scrollHeight;
-    // Only use minH on the very first render to prevent jump from text→textarea switch
+    // Use minH only on the very first render to prevent jump from text→textarea switch
     const floor = minHRef.current;
     el.style.height = `${Math.max(contentH, floor)}px`;
     // Clear floor after first measurement so textarea can freely grow/shrink with content
