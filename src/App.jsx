@@ -10,22 +10,22 @@ import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './f
 import { checkForUpdates } from './updater';
 
 const DEFAULT_SHORTCUTS = [
-  { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64', color: '#fff' },
+  { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: '/shortcuts/vercel.png', color: '#fff' },
   { id: 'gh', name: 'GitHub', url: 'https://github.com', icon: '/shortcuts/github.svg', color: '#e6edf3' },
-  { id: 'nf', name: 'Netlify', url: 'https://app.netlify.com', icon: 'https://www.google.com/s2/favicons?domain=netlify.com&sz=64', color: '#32e6e2' },
+  { id: 'nf', name: 'Netlify', url: 'https://app.netlify.com', icon: '/shortcuts/netlify.png', color: '#32e6e2' },
   { id: 'gm', name: 'Gmail', url: 'https://mail.google.com', icon: '/shortcuts/gmail.svg', color: '#ea4335' },
   { id: 'jg', name: 'Portfolio', url: 'https://www.joaograca.work/', icon: '/shortcuts/portfolio.png', color: '#7eb8da' },
   { id: 'fb', name: 'Firebase', url: 'https://console.firebase.google.com/', icon: '/shortcuts/firebase.svg', color: '#fbbf24' },
-  { id: 'ae', name: 'AliExpress', url: 'https://www.aliexpress.com', icon: 'https://www.google.com/s2/favicons?domain=aliexpress.com&sz=64', color: '#e43225' },
-  { id: 'et', name: 'Etsy', url: 'https://www.etsy.com/your/shops/me/dashboard', icon: 'https://www.google.com/s2/favicons?domain=etsy.com&sz=64', color: '#f1641e' },
-  { id: 'db', name: 'MongoDB', url: 'https://cloud.mongodb.com/', icon: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64', color: '#00ed64' },
-  { id: 'ai', name: 'ChatGPT', url: 'https://chat.openai.com', icon: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64', color: '#10a37f' },
-  { id: 'cl', name: 'Claude', url: 'https://claude.ai', icon: 'https://www.google.com/s2/favicons?domain=claude.ai&sz=64', color: '#d4a574' },
-  { id: 'li', name: 'LinkedIn', url: 'https://www.linkedin.com', icon: 'https://www.google.com/s2/favicons?domain=linkedin.com&sz=64', color: '#0a66c2' },
-  { id: 'hk', name: 'Heroku', url: 'https://dashboard.heroku.com', icon: 'https://www.google.com/s2/favicons?domain=heroku.com&sz=64', color: '#9e7cc1' },
-  { id: 'sf', name: 'Scryfall', url: 'https://scryfall.com', icon: 'https://www.google.com/s2/favicons?domain=scryfall.com&sz=64', color: '#e0a526' },
-  { id: 'cm', name: 'Cardmarket', url: 'https://www.cardmarket.com', icon: 'https://www.google.com/s2/favicons?domain=cardmarket.com&sz=64', color: '#1a82c4' },
-  { id: 'yt', name: 'YouTube', url: 'https://www.youtube.com', icon: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64', color: '#ff0000' },
+  { id: 'ae', name: 'AliExpress', url: 'https://www.aliexpress.com', icon: '/shortcuts/aliexpress.png', color: '#e43225' },
+  { id: 'et', name: 'Etsy', url: 'https://www.etsy.com/your/shops/me/dashboard', icon: '/shortcuts/etsy.png', color: '#f1641e' },
+  { id: 'db', name: 'MongoDB', url: 'https://cloud.mongodb.com/', icon: '/shortcuts/mongodb.png', color: '#00ed64' },
+  { id: 'ai', name: 'ChatGPT', url: 'https://chat.openai.com', icon: '/shortcuts/chatgpt.png', color: '#10a37f' },
+  { id: 'cl', name: 'Claude', url: 'https://claude.ai', icon: '/shortcuts/claude.png', color: '#d4a574' },
+  { id: 'li', name: 'LinkedIn', url: 'https://www.linkedin.com', icon: '/shortcuts/linkedin.png', color: '#0a66c2' },
+  { id: 'hk', name: 'Heroku', url: 'https://dashboard.heroku.com', icon: '/shortcuts/heroku.png', color: '#9e7cc1' },
+  { id: 'sf', name: 'Scryfall', url: 'https://scryfall.com', icon: '/shortcuts/scryfall.png', color: '#e0a526' },
+  { id: 'cm', name: 'Cardmarket', url: 'https://www.cardmarket.com', icon: '/shortcuts/cardmarket.png', color: '#1a82c4' },
+  { id: 'yt', name: 'YouTube', url: 'https://www.youtube.com', icon: '/shortcuts/youtube.png', color: '#ff0000' },
 ];
 
 const TAB_COLORS = ['#38bdf8', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#ffe66d', '#4ecdc4', '#ff6b6b', '#22c55e', '#60a5fa', '#f59e0b', '#14b8a6'];
@@ -1290,7 +1290,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.6.0</span>
+          <span className="tp-ver">v1.6.1</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>

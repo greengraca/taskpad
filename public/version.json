@@ -1,5 +1,5 @@
 {
-  "version": "1.6.0",
-  "notes": "Auto-resize textarea on mobile PWA",
+  "version": "1.6.1",
+  "notes": "Bundle shortcut icons locally for faster loading",
   "url": ""
 }
