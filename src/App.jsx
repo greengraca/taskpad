@@ -241,7 +241,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const inputRef = useRef(null);
   const textRef = useRef(null);
   const touchTimerRef = useRef(null);
-  useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); if (!task._new) inputRef.current.select(); } }, [editing]);
+  useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   const rowCount = Math.max(1, (text || '').split('\n').length);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
@@ -346,7 +346,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         onTouchStart={handleBodyTouchStart} onTouchEnd={handleBodyTouchEnd} onTouchMove={handleBodyTouchMove}>
         {editing ? (
           <textarea ref={inputRef} className="task-input" rows={rowCount} value={text}
-            onChange={e => { setText(e.target.value); }} onBlur={commit}
+            onChange={e => { setText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }} onBlur={commit}
             onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
@@ -1290,7 +1290,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.5.9</span>
+          <span className="tp-ver">v1.6.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
