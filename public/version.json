@@ -1,5 +1,5 @@
 {
   "version": "1.5.9",
-  "notes": "Fix PWA refresh - wait for SW controllerchange before reloading",
+  "notes": "Fix sync: flush saves on tab close, immediate localStorage writes",
   "url": ""
 }

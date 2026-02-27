@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { initSync, saveToCloud, cleanup, getAuthUser,
+import { initSync, saveToCloud, saveLocal, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
   reconnectFirestore,
@@ -441,6 +441,8 @@ export default function App() {
   const [scUnlocked, setScUnlocked] = useState(false);
   const editTabRef = useRef(null);
   const saveRef = useRef(null);
+  const dataRef = useRef(data);
+  const pendingSave = useRef(false);
   const undoStackRef = useRef([]);
   const newTeamTaskIds = useRef(new Set());
 
@@ -543,8 +545,14 @@ export default function App() {
   const up = useCallback((fn) => {
     setData(prev => {
       const next = fn(prev);
+      saveLocal(next);
+      dataRef.current = next;
+      pendingSave.current = true;
       if (saveRef.current) clearTimeout(saveRef.current);
-      saveRef.current = setTimeout(() => saveToCloud(next), 400);
+      saveRef.current = setTimeout(() => {
+        pendingSave.current = false;
+        saveToCloud(next);
+      }, 400);
       return next;
     });
   }, []);
@@ -618,11 +626,29 @@ export default function App() {
     return cleanup;
   }, []);
 
-  // Reconnect Firestore when PWA comes back from background
+  // Flush pending saves & reconnect Firestore on visibility/close
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') reconnectFirestore(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    const flushPending = () => {
+      if (pendingSave.current && dataRef.current) {
+        if (saveRef.current) clearTimeout(saveRef.current);
+        pendingSave.current = false;
+        saveToCloud(dataRef.current);
+      }
+    };
+    const onVisChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushPending();
+      } else {
+        reconnectFirestore();
+      }
+    };
+    const onBeforeUnload = () => flushPending();
+    document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
   }, []);
 
   // Subscribe to team tasks for ALL team projects (real-time across tabs)
