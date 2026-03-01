@@ -1,5 +1,5 @@
 {
-  "version": "1.6.1",
-  "notes": "Bundle shortcut icons locally for faster loading",
+  "version": "1.6.2",
+  "notes": "Fix mobile textarea clipping",
   "url": ""
 }
