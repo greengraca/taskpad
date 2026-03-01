@@ -3,8 +3,10 @@ import { initSync, saveToCloud, saveLocal, cleanup, getAuthUser,
   createTeamProject, sendTeamInvite, acceptTeamInvite, declineTeamInvite,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
   reconnectFirestore,
-  initVault, subscribeVaultEntries, createVaultEntry, updateVaultEntry, deleteVaultEntry, resetVault
+  initVault, subscribeVaultEntries, createVaultEntry, updateVaultEntry, deleteVaultEntry, resetVault,
+  subscribePersonalNotes, createPersonalNote, updatePersonalNote, deletePersonalNote
 } from './sync';
+import { parseMarkdown, extractLinks, extractTags } from './markdown';
 import { generateSalt, toBase64, fromBase64, deriveKey, encryptEntry, decryptEntry, createVerifier, checkVerifier } from './crypto';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
 import { checkForUpdates } from './updater';
@@ -30,6 +32,7 @@ const DEFAULT_SHORTCUTS = [
 
 const TAB_COLORS = ['#38bdf8', '#34d399', '#a78bfa', '#f472b6', '#fb923c', '#ffe66d', '#4ecdc4', '#ff6b6b', '#22c55e', '#60a5fa', '#f59e0b', '#14b8a6'];
 const INBOX_ID = '__inbox__';
+const NOTES_ID = '__notes__';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const EMPTY = [];
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -496,6 +499,15 @@ export default function App() {
   selectedIdsRef.current = selectedIds;
   const dragSelectRef = useRef({ active: false, startId: null, startY: 0 });
 
+  // Notes state
+  const [notesList, setNotesList] = useState([]);
+  const [activeNote, setActiveNote] = useState(null); // note id or null
+  const [noteView, setNoteView] = useState('edit'); // 'edit' | 'preview'
+  const [noteSearch, setNoteSearch] = useState('');
+  const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
+  const noteSaveRef = useRef(null);
+  const [noteDeleteConfirm, setNoteDeleteConfirm] = useState(false);
+
   const projects = data?.projects || EMPTY;
   // Precompile project detection regexes (only recomputed when projects change)
   const projectPatterns = useMemo(() => projects.filter(p => !p.isTeam).map(p => ({
@@ -508,6 +520,7 @@ export default function App() {
   const tasks = data?.tasks || EMPTY;
   const activeTab = data?.activeTab || INBOX_ID;
   const isInbox = activeTab === INBOX_ID;
+  const isNotes = activeTab === NOTES_ID;
   const activeProj = projects.find(p => p.id === activeTab);
   const isTeamTab = !!(activeProj?.isTeam && activeProj?.teamId);
   const teamId = activeProj?.teamId;
@@ -614,7 +627,7 @@ export default function App() {
       scOrder = scOrder.filter(id => byId.has(id));
       const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
       const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID };
-      if (next.activeTab !== INBOX_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
+      if (next.activeTab !== INBOX_ID && next.activeTab !== NOTES_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
     initSync(
@@ -726,6 +739,109 @@ export default function App() {
     setVaultEditEntry(null);
     setVaultSetupMode(null);
   }, [teamId]);
+
+  // Subscribe to personal notes when authenticated
+  useEffect(() => {
+    if (!synced) { setNotesList([]); return; }
+    const unsub = subscribePersonalNotes((notes) => {
+      setNotesList(notes);
+    });
+    return unsub;
+  }, [synced]);
+
+  // Notes auto-save: debounce 800ms
+  const saveNote = useCallback((noteId, title, content) => {
+    if (noteSaveRef.current) clearTimeout(noteSaveRef.current);
+    noteSaveRef.current = setTimeout(() => {
+      const tags = extractTags(content);
+      const links = extractLinks(content);
+      updatePersonalNote({ noteId, patch: { title, content, tags, links } }).catch(e => console.warn('Note save failed:', e));
+    }, 800);
+  }, []);
+
+  // Backlinks for the active note
+  const activeNoteData = activeNote ? notesList.find(n => n.id === activeNote) : null;
+  const backlinks = useMemo(() => {
+    if (!activeNoteData) return [];
+    const title = activeNoteData.title?.toLowerCase();
+    if (!title) return [];
+    return notesList.filter(n => n.id !== activeNote && n.links?.some(l => l.toLowerCase() === title));
+  }, [notesList, activeNote, activeNoteData?.title]);
+
+  // Filtered notes for search
+  const filteredNotes = useMemo(() => {
+    if (!noteSearch.trim()) return notesList;
+    const q = noteSearch.toLowerCase();
+    return notesList.filter(n =>
+      (n.title || '').toLowerCase().includes(q) ||
+      (n.content || '').toLowerCase().includes(q) ||
+      (n.tags || []).some(t => t.includes(q))
+    );
+  }, [notesList, noteSearch]);
+
+  const createNote = useCallback(async (opts = {}) => {
+    try {
+      const id = await createPersonalNote({
+        title: opts.title || 'Untitled',
+        content: opts.content || '',
+        tags: [],
+        links: [],
+        pinned: false,
+        dailyDate: opts.dailyDate || null,
+      });
+      setActiveNote(id);
+      setNoteDraft({ title: opts.title || 'Untitled', content: opts.content || '' });
+      setNoteView('edit');
+      setNoteDeleteConfirm(false);
+    } catch (e) {
+      console.warn('Create note failed:', e);
+    }
+  }, []);
+
+  const openDailyNote = useCallback(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const existing = notesList.find(n => n.dailyDate === today);
+    if (existing) {
+      setActiveNote(existing.id);
+      setNoteDraft({ title: existing.title, content: existing.content || '' });
+      setNoteView('edit');
+    } else {
+      const d = new Date();
+      const title = `Daily - ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      createNote({ title, dailyDate: today });
+    }
+  }, [notesList, createNote]);
+
+  const handleNoteClick = useCallback((noteId) => {
+    const note = notesList.find(n => n.id === noteId);
+    if (note) {
+      setActiveNote(noteId);
+      setNoteDraft({ title: note.title || '', content: note.content || '' });
+      setNoteView('edit');
+      setNoteDeleteConfirm(false);
+    }
+  }, [notesList]);
+
+  const handleWikilinkClick = useCallback((noteName) => {
+    const existing = notesList.find(n => (n.title || '').toLowerCase() === noteName.toLowerCase());
+    if (existing) {
+      handleNoteClick(existing.id);
+    } else {
+      createNote({ title: noteName });
+    }
+  }, [notesList, handleNoteClick, createNote]);
+
+  const handleDeleteNote = useCallback(async () => {
+    if (!activeNote) return;
+    try {
+      await deletePersonalNote({ noteId: activeNote });
+      setActiveNote(null);
+      setNoteDraft({ title: '', content: '' });
+      setNoteDeleteConfirm(false);
+    } catch (e) {
+      console.warn('Delete note failed:', e);
+    }
+  }, [activeNote]);
 
   useEffect(() => {
     checkForUpdates().then(info => {
@@ -1290,7 +1406,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.6.2</span>
+          <span className="tp-ver">v1.7.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1371,9 +1487,13 @@ export default function App() {
 
       {/* ─── Nav with draggable tabs ─── */}
       <nav className="tp-nav"><div className="tp-nav-scroll">
-        <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => up(p => ({ ...p, activeTab: INBOX_ID }))} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
+        <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <span className="tp-td" style={{ background: '#38bdf8' }} />Inbox
           {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
+        </button>
+        <button className={`tp-t ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
+          <span className="tp-td" style={{ background: '#a78bfa' }} />Notes
+          {notesList.length > 0 && <span className="tp-tc">{notesList.length}</span>}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
@@ -1383,7 +1503,7 @@ export default function App() {
                 style={{ borderBottomColor: pr.color, width: Math.max(70, editTabName.length * 9) }} />
             ) : (
               <button className={`tp-t ${activeTab === pr.id ? 'tp-t-on' : ''}`}
-                onClick={() => { if (!isTabDragging && !tabTouchRef.current.longPressed) up(p => ({ ...p, activeTab: pr.id })); tabTouchRef.current.longPressed = false; }}
+                onClick={() => { if (!isTabDragging && !tabTouchRef.current.longPressed) { up(p => ({ ...p, activeTab: pr.id })); setActiveNote(null); } tabTouchRef.current.longPressed = false; }}
                 onMouseDown={e => { if (e.button === 0) onTabDrag(e, pr.id); }}
                 onTouchStart={e => tabTouchStart(e, pr.id)}
                 onTouchMove={e => tabTouchMove(e, pr.id)}
@@ -1511,6 +1631,97 @@ export default function App() {
       })()}
 
       <main className="tp-body">
+        {isNotes ? (
+          <div className="notes-container">
+            {!activeNote ? (
+              /* ─── Notes List View ─── */
+              <div className="notes-list-view">
+                <div className="notes-toolbar">
+                  <input className="notes-search" placeholder="Search notes..." value={noteSearch} onChange={e => setNoteSearch(e.target.value)} />
+                  <button className="notes-btn" onClick={() => createNote()}>+ New</button>
+                  <button className="notes-btn notes-btn-daily" onClick={openDailyNote}>Today</button>
+                </div>
+                {!synced && <div className="notes-signin-hint">Sign in to use Notes</div>}
+                {synced && filteredNotes.length === 0 && (
+                  <div className="notes-empty" onClick={() => createNote()}>
+                    <span style={{ fontSize: 28, opacity: 0.25 }}>📝</span>
+                    <span>No notes yet — click to create one</span>
+                  </div>
+                )}
+                {filteredNotes.map(note => (
+                  <div key={note.id} className={`notes-item ${note.pinned ? 'notes-pinned' : ''}`} onClick={() => handleNoteClick(note.id)}>
+                    <div className="notes-item-left">
+                      {note.dailyDate && <span className="notes-daily-dot" />}
+                      <div className="notes-item-info">
+                        <span className="notes-item-title">{note.title || 'Untitled'}</span>
+                        {(note.tags || []).length > 0 && (
+                          <span className="notes-item-tags">{note.tags.map(t => `#${t}`).join(' ')}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="notes-item-date">
+                      {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* ─── Note Editor View ─── */
+              <div className="notes-editor-view">
+                <div className="notes-editor-toolbar">
+                  <button className="notes-back-btn" onClick={() => { setActiveNote(null); setNoteDeleteConfirm(false); }}>← Back</button>
+                  <input className="notes-title-input" value={noteDraft.title} placeholder="Note title"
+                    onChange={e => {
+                      const title = e.target.value;
+                      setNoteDraft(d => ({ ...d, title }));
+                      saveNote(activeNote, title, noteDraft.content);
+                    }} />
+                  <div className="notes-editor-actions">
+                    {noteDeleteConfirm ? (
+                      <>
+                        <button className="notes-btn notes-btn-danger" onClick={handleDeleteNote}>Confirm</button>
+                        <button className="notes-btn" onClick={() => setNoteDeleteConfirm(false)}>Cancel</button>
+                      </>
+                    ) : (
+                      <button className="notes-btn notes-btn-danger" onClick={() => setNoteDeleteConfirm(true)}>Del</button>
+                    )}
+                  </div>
+                </div>
+                <div className="notes-view-tabs">
+                  <button className={`notes-view-tab ${noteView === 'edit' ? 'on' : ''}`} onClick={() => setNoteView('edit')}>Edit</button>
+                  <button className={`notes-view-tab ${noteView === 'preview' ? 'on' : ''}`} onClick={() => setNoteView('preview')}>Preview</button>
+                </div>
+                <div className="notes-content-area">
+                  {noteView === 'edit' ? (
+                    <textarea className="notes-textarea" value={noteDraft.content} placeholder="Write in markdown... Use [[wikilinks]] and #tags"
+                      onChange={e => {
+                        const content = e.target.value;
+                        setNoteDraft(d => ({ ...d, content }));
+                        saveNote(activeNote, noteDraft.title, content);
+                      }} />
+                  ) : (
+                    <div className="notes-preview" dangerouslySetInnerHTML={{ __html: parseMarkdown(noteDraft.content) }}
+                      onClick={e => {
+                        const wl = e.target.closest('.note-wikilink');
+                        if (wl) { e.preventDefault(); handleWikilinkClick(wl.dataset.note); }
+                      }} />
+                  )}
+                </div>
+                {backlinks.length > 0 && (
+                  <div className="notes-backlinks">
+                    <div className="notes-backlinks-title">Backlinks</div>
+                    {backlinks.map(bl => (
+                      <div key={bl.id} className="notes-backlink-item" onClick={() => handleNoteClick(bl.id)}>
+                        "{bl.title}" links here
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+        <>
         {total > 0 && (
           <div className="tp-prog">
             <div className="tp-pbar"><div className="tp-pfill" style={{ width: `${(done / total) * 100}%`, background: accent }} /></div>
@@ -1725,6 +1936,8 @@ export default function App() {
             );
           })}
         </div>
+        </>
+        )}
       </main>
 
       {data.showSc && (

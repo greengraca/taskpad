@@ -58,6 +58,7 @@ let unsubInvites = null;
 let unsubTeamProjects = null;
 let teamTasksUnsubs = new Map();
 let vaultUnsubs = new Map();
+let unsubNotes = null;
 
 const cleanTeamListeners = () => {
   try { if (unsubInvites) unsubInvites(); } catch (e) { console.warn('Unsub invites error:', e); }
@@ -173,6 +174,7 @@ export const saveToCloud = async (data) => {
 export const cleanup = () => {
   if (unsubscribeUserDoc) unsubscribeUserDoc();
   if (unsubscribeAuth) unsubscribeAuth();
+  if (unsubNotes) { unsubNotes(); unsubNotes = null; }
   cleanTeamListeners();
 };
 
@@ -467,6 +469,69 @@ export const updateVaultEntry = async ({ teamId, entryId, encryptedData, iv }) =
 export const deleteVaultEntry = async ({ teamId, entryId }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
   await deleteDoc(doc(db, 'projects', teamId, 'vault', entryId));
+};
+
+// ─── Personal Notes ──────────────────────────────────────────────────────────
+
+export const subscribePersonalNotes = (cb) => {
+  if (!isFirebaseConfigured() || !userId) {
+    cb([]);
+    return () => {};
+  }
+
+  if (unsubNotes) {
+    unsubNotes();
+    unsubNotes = null;
+  }
+
+  const qy = query(
+    collection(db, 'users', userId, 'notes'),
+    orderBy('updatedAt', 'desc')
+  );
+
+  const unsub = onSnapshot(qy, (snap) => {
+    const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    cb(notes);
+  }, (e) => {
+    console.warn('Notes listener error:', e);
+    cb([]);
+  });
+
+  unsubNotes = unsub;
+  return () => {
+    if (unsubNotes === unsub) {
+      unsub();
+      unsubNotes = null;
+    }
+  };
+};
+
+export const createPersonalNote = async ({ title, content, tags, links, pinned, dailyDate }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in to create notes');
+  const ref = await addDoc(collection(db, 'users', userId, 'notes'), {
+    title: title || 'Untitled',
+    content: content || '',
+    tags: tags || [],
+    links: links || [],
+    pinned: pinned || false,
+    dailyDate: dailyDate || null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const updatePersonalNote = async ({ noteId, patch }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'users', userId, 'notes', noteId), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const deletePersonalNote = async ({ noteId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
 };
 
 export const resetVault = async ({ teamId }) => {
