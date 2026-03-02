@@ -42,5 +42,6 @@ export const parseMarkdown = (content) => {
   // Basic sanitization: strip script tags and event handlers
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '');
+    .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/<a\s+href="/g, '<a target="_blank" rel="noopener noreferrer" href="');
 };
