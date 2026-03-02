@@ -509,52 +509,6 @@ export default function App() {
   const [noteDeleteConfirm, setNoteDeleteConfirm] = useState(false);
   const noteTextareaRef = useRef(null);
 
-  const applyFormat = useCallback((type) => {
-    const ta = noteTextareaRef.current;
-    if (!ta) return;
-    const { selectionStart: s, selectionEnd: e, value } = ta;
-    const sel = value.slice(s, e);
-    const has = sel.length > 0;
-    let before = value.slice(0, s), after = value.slice(e);
-    let insert, cursorStart, cursorEnd;
-
-    if (type === 'bold') {
-      insert = has ? `**${sel}**` : '****';
-      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
-    } else if (type === 'italic') {
-      insert = has ? `*${sel}*` : '**';
-      cursorStart = cursorEnd = has ? s + insert.length : s + 1;
-    } else if (type === 'heading') {
-      const lineStart = value.lastIndexOf('\n', s - 1) + 1;
-      before = value.slice(0, lineStart);
-      const rest = value.slice(lineStart, e);
-      after = value.slice(e);
-      insert = `## ${rest}`;
-      cursorStart = cursorEnd = lineStart + insert.length;
-    } else if (type === 'link') {
-      if (has) { insert = `[${sel}](url)`; cursorStart = s + sel.length + 3; cursorEnd = cursorStart + 3; }
-      else { insert = '[](url)'; cursorStart = s + 1; cursorEnd = s + 1; }
-    } else if (type === 'code') {
-      if (has && sel.includes('\n')) { insert = '```\n' + sel + '\n```'; cursorStart = cursorEnd = s + insert.length; }
-      else if (has) { insert = '`' + sel + '`'; cursorStart = cursorEnd = s + insert.length; }
-      else { insert = '``'; cursorStart = cursorEnd = s + 1; }
-    } else if (type === 'list') {
-      if (has) { insert = sel.split('\n').map(l => '- ' + l).join('\n'); } else { insert = '- '; }
-      cursorStart = cursorEnd = s + insert.length;
-    } else if (type === 'quote') {
-      if (has) { insert = sel.split('\n').map(l => '> ' + l).join('\n'); } else { insert = '> '; }
-      cursorStart = cursorEnd = s + insert.length;
-    } else if (type === 'wikilink') {
-      insert = has ? `[[${sel}]]` : '[[]]';
-      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
-    } else return;
-
-    const newContent = before + insert + after;
-    setNoteDraft(d => ({ ...d, content: newContent }));
-    saveNote(activeNote, noteDraft.title, newContent);
-    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(cursorStart, cursorEnd); });
-  }, [activeNote, noteDraft.title, saveNote]);
-
   const projects = data?.projects || EMPTY;
   // Precompile project detection regexes (only recomputed when projects change)
   const projectPatterns = useMemo(() => projects.filter(p => !p.isTeam).map(p => ({
@@ -805,6 +759,52 @@ export default function App() {
       updatePersonalNote({ noteId, patch: { title, content, tags, links } }).catch(e => console.warn('Note save failed:', e));
     }, 800);
   }, []);
+
+  const applyFormat = useCallback((type) => {
+    const ta = noteTextareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const sel = value.slice(s, e);
+    const has = sel.length > 0;
+    let before = value.slice(0, s), after = value.slice(e);
+    let insert, cursorStart, cursorEnd;
+
+    if (type === 'bold') {
+      insert = has ? `**${sel}**` : '****';
+      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
+    } else if (type === 'italic') {
+      insert = has ? `*${sel}*` : '**';
+      cursorStart = cursorEnd = has ? s + insert.length : s + 1;
+    } else if (type === 'heading') {
+      const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+      before = value.slice(0, lineStart);
+      const rest = value.slice(lineStart, e);
+      after = value.slice(e);
+      insert = `## ${rest}`;
+      cursorStart = cursorEnd = lineStart + insert.length;
+    } else if (type === 'link') {
+      if (has) { insert = `[${sel}](url)`; cursorStart = s + sel.length + 3; cursorEnd = cursorStart + 3; }
+      else { insert = '[](url)'; cursorStart = s + 1; cursorEnd = s + 1; }
+    } else if (type === 'code') {
+      if (has && sel.includes('\n')) { insert = '```\n' + sel + '\n```'; cursorStart = cursorEnd = s + insert.length; }
+      else if (has) { insert = '`' + sel + '`'; cursorStart = cursorEnd = s + insert.length; }
+      else { insert = '``'; cursorStart = cursorEnd = s + 1; }
+    } else if (type === 'list') {
+      if (has) { insert = sel.split('\n').map(l => '- ' + l).join('\n'); } else { insert = '- '; }
+      cursorStart = cursorEnd = s + insert.length;
+    } else if (type === 'quote') {
+      if (has) { insert = sel.split('\n').map(l => '> ' + l).join('\n'); } else { insert = '> '; }
+      cursorStart = cursorEnd = s + insert.length;
+    } else if (type === 'wikilink') {
+      insert = has ? `[[${sel}]]` : '[[]]';
+      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
+    } else return;
+
+    const newContent = before + insert + after;
+    setNoteDraft(d => ({ ...d, content: newContent }));
+    saveNote(activeNote, noteDraft.title, newContent);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(cursorStart, cursorEnd); });
+  }, [activeNote, noteDraft.title, saveNote]);
 
   // Backlinks for the active note
   const activeNoteData = activeNote ? notesList.find(n => n.id === activeNote) : null;
@@ -1453,7 +1453,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.7.1</span>
+          <span className="tp-ver">v1.7.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
