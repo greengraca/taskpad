@@ -851,7 +851,7 @@ export default function App() {
     if (existing) {
       setActiveNote(existing.id);
       setNoteDraft({ title: existing.title, content: existing.content || '' });
-      setNoteView('edit');
+      setNoteView(existing.content ? 'preview' : 'edit');
     } else {
       const d = new Date();
       const title = `Daily - ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -864,7 +864,7 @@ export default function App() {
     if (note) {
       setActiveNote(noteId);
       setNoteDraft({ title: note.title || '', content: note.content || '' });
-      setNoteView('edit');
+      setNoteView(note.content ? 'preview' : 'edit');
       setNoteDeleteConfirm(false);
     }
   }, [notesList]);
@@ -1453,7 +1453,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.7.2</span>
+          <span className="tp-ver">v1.7.3</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
