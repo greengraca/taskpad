@@ -255,24 +255,14 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, isSelecting, onDragSelectStart, onDragSelectEnter, dragSelectRef, notesList, onLinkNote, onUnlinkNote }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, isSelecting, onDragSelectStart, onDragSelectEnter, dragSelectRef }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
   const touchTimerRef = useRef(null);
-  const [notePicker, setNotePicker] = useState(false);
-  const [notePickerSearch, setNotePickerSearch] = useState('');
-  const notePickerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
-  useEffect(() => {
-    if (!notePicker) return;
-    const handler = (e) => { if (notePickerRef.current && !notePickerRef.current.contains(e.target)) { setNotePicker(false); setNotePickerSearch(''); } };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [notePicker]);
-  const linkedNote = task.noteId && notesList ? notesList.find(n => n.id === task.noteId) : null;
   const rowCount = Math.max(1, (text || '').split('\n').length);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -382,9 +372,8 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
       </div>
-      {(projLabel || authorNick || linkedNote) && (
+      {(projLabel || authorNick) && (
         <div className="task-badges">
-          {linkedNote && <span className="task-note-badge" title={linkedNote.title}>📎</span>}
           {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
           {authorNick && (
             <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
@@ -395,30 +384,6 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         </div>
       )}
       <div className="task-actions">
-        {notesList && onLinkNote && (
-          <div className="task-link-wrap" ref={notePickerRef}>
-            <button className={`task-link-btn${linkedNote ? ' linked' : ''}`} title={linkedNote ? `Linked: ${linkedNote.title}` : 'Link to note'}
-              onClick={() => { if (linkedNote) { onUnlinkNote(task.id); } else { setNotePicker(v => !v); setNotePickerSearch(''); } }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-              </svg>
-            </button>
-            {notePicker && (
-              <div className="task-note-picker">
-                <input className="task-note-picker-search" placeholder="Search notes..." value={notePickerSearch} autoFocus
-                  onChange={e => setNotePickerSearch(e.target.value)} onClick={e => e.stopPropagation()} />
-                <div className="task-note-picker-list">
-                  {(notesList || []).filter(n => !notePickerSearch || (n.title || '').toLowerCase().includes(notePickerSearch.toLowerCase())).slice(0, 8).map(n => (
-                    <button key={n.id} className="task-note-picker-item" onMouseDown={e => { e.preventDefault(); onLinkNote(task.id, n.id); setNotePicker(false); setNotePickerSearch(''); }}>
-                      {n.title || 'Untitled'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
         {canHide && (
           <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -565,6 +530,8 @@ export default function App() {
   const [slashMenu, setSlashMenu] = useState(null);
   const slashMenuRef = useRef(null);
   const [showGraph, setShowGraph] = useState(false);
+  const [projPicker, setProjPicker] = useState(false);
+  const projPickerRef = useRef(null);
   const graphCanvasRef = useRef(null);
 
   const projects = data?.projects || EMPTY;
@@ -893,6 +860,14 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showTemplatePicker]);
 
+  // Close project picker on outside click
+  useEffect(() => {
+    if (!projPicker) return;
+    const handler = (e) => { if (projPickerRef.current && !projPickerRef.current.contains(e.target)) setProjPicker(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [projPicker]);
+
   // Close slash menu on outside click
   useEffect(() => {
     if (!slashMenu) return;
@@ -926,12 +901,6 @@ export default function App() {
     if (!title) return [];
     return notesList.filter(n => n.id !== activeNote && n.links?.some(l => l.toLowerCase() === title));
   }, [notesList, activeNote, activeNoteData?.title]);
-
-  // Tasks linked to the active note
-  const linkedTasks = useMemo(() => {
-    if (!activeNote) return [];
-    return tasks.filter(t => t.noteId === activeNote);
-  }, [tasks, activeNote]);
 
   // Filtered notes for search
   const filteredNotes = useMemo(() => {
@@ -1515,12 +1484,19 @@ export default function App() {
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, hiddenFromInbox: true } : t) }));
   };
 
-  const linkTaskToNote = (taskId, noteId) => {
-    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, noteId } : t) }));
-  };
-  const unlinkTaskFromNote = (taskId) => {
-    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, noteId: undefined } : t) }));
-  };
+  // Project-Note linking
+  const linkNoteToProject = useCallback((noteId, projectId) => {
+    updatePersonalNote({ noteId, patch: { projectId } }).catch(e => console.warn('Link note failed:', e));
+  }, []);
+  const unlinkNoteFromProject = useCallback((noteId) => {
+    updatePersonalNote({ noteId, patch: { projectId: null } }).catch(e => console.warn('Unlink note failed:', e));
+  }, []);
+
+  // Notes linked to the active project
+  const projectNotes = useMemo(() => {
+    if (isNotes || isTeamTab || !activeTab || activeTab === INBOX_ID) return [];
+    return notesList.filter(n => n.projectId === activeTab);
+  }, [notesList, activeTab, isNotes, isTeamTab]);
 
   const onSelectTask = (id, mode) => {
     setSelectedIds(prev => {
@@ -2108,6 +2084,9 @@ export default function App() {
                         )}
                       </div>
                     </div>
+                    {(() => { const lp = note.projectId ? projects.find(p => p.id === note.projectId && !p.isTeam) : null;
+                      return lp ? <span className="notes-item-proj" style={{ color: lp.color, borderColor: lp.color + '44' }}>{lp.name}</span> : null;
+                    })()}
                     <span className="notes-item-date">
                       {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                     </span>
@@ -2139,6 +2118,30 @@ export default function App() {
                 <div className="notes-view-tabs">
                   <button className={`notes-view-tab ${noteView === 'edit' ? 'on' : ''}`} onClick={() => setNoteView('edit')}>Edit</button>
                   <button className={`notes-view-tab ${noteView === 'preview' ? 'on' : ''}`} onClick={() => setNoteView('preview')}>Preview</button>
+                  <div className="notes-proj-link" ref={projPickerRef}>
+                    {(() => {
+                      const linked = activeNoteData?.projectId ? projects.find(p => p.id === activeNoteData.projectId && !p.isTeam) : null;
+                      return linked ? (
+                        <span className="notes-proj-badge" style={{ borderColor: linked.color + '44', color: linked.color }}>
+                          <span className="notes-proj-dot" style={{ background: linked.color }} />
+                          {linked.name}
+                          <button className="notes-proj-unlink" onClick={() => unlinkNoteFromProject(activeNote)}>×</button>
+                        </span>
+                      ) : (
+                        <button className="notes-proj-link-btn" onClick={() => setProjPicker(v => !v)}>+ Project</button>
+                      );
+                    })()}
+                    {projPicker && (
+                      <div className="notes-proj-picker">
+                        {projects.filter(p => !p.isTeam).map(p => (
+                          <button key={p.id} className="notes-proj-picker-item" onMouseDown={e => { e.preventDefault(); linkNoteToProject(activeNote, p.id); setProjPicker(false); }}>
+                            <span className="notes-proj-dot" style={{ background: p.color }} />
+                            {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {noteView === 'edit' && (
                   <div className="notes-fmt-bar">
@@ -2245,21 +2248,6 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {linkedTasks.length > 0 && (
-                  <div className="notes-backlinks">
-                    <div className="notes-backlinks-title">Linked Tasks</div>
-                    {linkedTasks.map(lt => {
-                      const proj = projects.find(p => p.id === lt.projectId);
-                      return (
-                        <div key={lt.id} className="notes-linked-task-item" onClick={() => { up(p => ({ ...p, activeTab: lt.projectId || INBOX_ID })); setActiveNote(null); }}>
-                          <span className={`notes-lt-status${lt.done ? ' done' : ''}`}>{lt.done ? '✓' : '○'}</span>
-                          <span className="notes-lt-text">{(lt.text || '').length > 50 ? lt.text.slice(0, 50) + '…' : lt.text}</span>
-                          {proj && <span className="notes-lt-proj" style={{ color: proj.color }}>{proj.name}</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -2283,6 +2271,16 @@ export default function App() {
             <div className="tp-pbar"><div className="tp-pfill" style={{ width: `${(done / total) * 100}%`, background: accent }} /></div>
             <span className="tp-pnum">{done}/{total}</span>
             {done > 0 && <button className="tp-pcl" onClick={clearDone}>Clear done</button>}
+          </div>
+        )}
+        {projectNotes.length > 0 && (
+          <div className="proj-notes-bar">
+            <span className="proj-notes-label">📝 Notes</span>
+            {projectNotes.map(n => (
+              <button key={n.id} className="proj-notes-chip" onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); handleNoteClick(n.id); }}>
+                {n.title || 'Untitled'}
+              </button>
+            ))}
           </div>
         )}
         {selectedIds.size > 0 && (
@@ -2482,7 +2480,6 @@ export default function App() {
                   isTeam={isTeamTab} nicknames={teamProjData?.nicknames} avatars={teamProjData?.avatars}
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
-                  notesList={isTeamTab ? undefined : notesList} onLinkNote={linkTaskToNote} onUnlinkNote={unlinkTaskFromNote}
                   isSelecting={selectedIds.size > 0}
                   selected={selectedIds.has(task.id)} onSelect={onSelectTask}
                   onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
