@@ -339,8 +339,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .notes-preview .note-tag { color: #a78bfa; font-size: 12px; font-family: var(--fm); }
 .notes-preview mark { background: rgba(255, 208, 0, 0.25); color: inherit; padding: 1px 2px; border-radius: 2px; }
 .notes-preview del { color: #777; }
-.notes-preview li.task-list-item { list-style: none; margin-left: -20px; }
-.notes-preview input[type="checkbox"] { cursor: pointer; margin-right: 6px; accent-color: #a78bfa; }
+.notes-preview li.task-list-item { list-style: none; margin-left: -20px; display: flex; align-items: baseline; }
+.notes-preview input[type="checkbox"] { cursor: pointer; margin-right: 6px; accent-color: #a78bfa; position: relative; top: 1px; flex-shrink: 0; }
 .notes-preview hr { border: none; border-top: 1px solid #252525; margin: 12px 0; }
 .notes-preview img { max-width: 100%; border-radius: 6px; }
 .notes-preview table { border-collapse: collapse; width: 100%; margin: 8px 0; }
