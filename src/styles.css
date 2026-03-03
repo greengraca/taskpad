@@ -301,7 +301,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .notes-editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; flex-shrink: 0; }
 .notes-back-btn { background: none; border: 1px solid #2a2a2a; color: #888; font-family: var(--fm); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .notes-back-btn:hover { border-color: #444; color: #bbb; }
-.notes-title-input { flex: 1; background: transparent; border: none; border-bottom: 1px solid #252525; padding: 4px 8px; color: #e8e8e8; font-family: var(--fu); font-size: 15px; font-weight: 600; outline: none; }
+.notes-title-input { flex: 1; min-width: 0; background: transparent; border: none; border-bottom: 1px solid #252525; padding: 4px 8px; color: #e8e8e8; font-family: var(--fu); font-size: 15px; font-weight: 600; outline: none; }
 .notes-title-input:focus { border-bottom-color: #a78bfa; }
 .notes-editor-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .notes-view-tabs { display: flex; gap: 4px; padding: 4px 16px; flex-shrink: 0; }
