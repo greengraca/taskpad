@@ -806,6 +806,19 @@ export default function App() {
     requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(cursorStart, cursorEnd); });
   }, [activeNote, noteDraft.title, saveNote]);
 
+  // Ctrl+E to toggle edit/preview when a note is open
+  useEffect(() => {
+    if (!activeNote || activeProject !== NOTES_ID) return;
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setNoteView(v => v === 'edit' ? 'preview' : 'edit');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeNote, activeProject]);
+
   // Backlinks for the active note
   const activeNoteData = activeNote ? notesList.find(n => n.id === activeNote) : null;
   const backlinks = useMemo(() => {
@@ -1453,7 +1466,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.7.3</span>
+          <span className="tp-ver">v1.7.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1740,12 +1753,12 @@ export default function App() {
                 </div>
                 {noteView === 'edit' && (
                   <div className="notes-fmt-bar">
-                    <button className="notes-fmt-btn" title="Bold" onClick={() => applyFormat('bold')}><b>B</b></button>
-                    <button className="notes-fmt-btn" title="Italic" onClick={() => applyFormat('italic')}><i>I</i></button>
+                    <button className="notes-fmt-btn" title="Bold (Ctrl+B)" onClick={() => applyFormat('bold')}><b>B</b></button>
+                    <button className="notes-fmt-btn" title="Italic (Ctrl+I)" onClick={() => applyFormat('italic')}><i>I</i></button>
                     <button className="notes-fmt-btn" title="Heading" onClick={() => applyFormat('heading')}>H</button>
                     <span className="notes-fmt-sep" />
-                    <button className="notes-fmt-btn" title="Link" onClick={() => applyFormat('link')}>🔗</button>
-                    <button className="notes-fmt-btn" title="Code" onClick={() => applyFormat('code')}>&lt;/&gt;</button>
+                    <button className="notes-fmt-btn" title="Link (Ctrl+K)" onClick={() => applyFormat('link')}>🔗</button>
+                    <button className="notes-fmt-btn" title="Code (Ctrl+`)" onClick={() => applyFormat('code')}>&lt;/&gt;</button>
                     <span className="notes-fmt-sep" />
                     <button className="notes-fmt-btn" title="Bullet list" onClick={() => applyFormat('list')}>•</button>
                     <button className="notes-fmt-btn" title="Quote" onClick={() => applyFormat('quote')}>❝</button>
@@ -1756,6 +1769,15 @@ export default function App() {
                 <div className="notes-content-area">
                   {noteView === 'edit' ? (
                     <textarea ref={noteTextareaRef} className="notes-textarea" value={noteDraft.content} placeholder="Write in markdown... Use [[wikilinks]] and #tags"
+                      onKeyDown={e => {
+                        const mod = e.ctrlKey || e.metaKey;
+                        if (!mod) return;
+                        const key = e.key.toLowerCase();
+                        if (key === 'b') { e.preventDefault(); applyFormat('bold'); }
+                        else if (key === 'i') { e.preventDefault(); applyFormat('italic'); }
+                        else if (key === 'k') { e.preventDefault(); applyFormat('link'); }
+                        else if (key === '`') { e.preventDefault(); applyFormat('code'); }
+                      }}
                       onChange={e => {
                         const content = e.target.value;
                         setNoteDraft(d => ({ ...d, content }));
