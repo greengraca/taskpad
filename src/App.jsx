@@ -44,6 +44,16 @@ const NOTE_TEMPLATES = [
   { name: 'Weekly Review', title: 'Weekly Review', content: `## Wins\n- \n\n## Challenges\n- \n\n## Next Week\n- [ ] \n- [ ] \n- [ ] \n\n## Notes\n\n` },
 ];
 
+const SLASH_COMMANDS = [
+  { name: 'Heading', icon: 'H#', insert: '## ', cursor: 3 },
+  { name: 'Bullet', icon: '•', insert: '- ', cursor: 2 },
+  { name: 'Checkbox', icon: '☑', insert: '- [ ] ', cursor: 6 },
+  { name: 'Callout', icon: '📢', insert: '> [!note] \n> ', cursor: 10 },
+  { name: 'Divider', icon: '—', insert: '---\n', cursor: 4 },
+  { name: 'Quote', icon: '❝', insert: '> ', cursor: 2 },
+  { name: 'Code Block', icon: '</>', insert: '```\n\n```', cursor: 4 },
+];
+
 // ─── Pixel art avatars ───
 const AVATARS = [
   { id: 0, name: 'Knight', color: '#ef4444', src: '/avatars/0.svg' },
@@ -245,14 +255,24 @@ function ShortcutIcon({ shortcut, unlocked, onUnlock, onDragStart, style, refCb 
 }
 
 // ─── Task Line ───
-function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, isSelecting, onDragSelectStart, onDragSelectEnter, dragSelectRef }) {
+function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, avatars, onToggle, onDelete, onChange, onHide, dragHandle, style, refCb, selected, onSelect, isSelecting, onDragSelectStart, onDragSelectEnter, dragSelectRef, notesList, onLinkNote, onUnlinkNote }) {
   const [editing, setEditing] = useState(task._new || false);
   const [text, setText] = useState(task.text);
   const inputRef = useRef(null);
   const textRef = useRef(null);
   const touchTimerRef = useRef(null);
+  const [notePicker, setNotePicker] = useState(false);
+  const [notePickerSearch, setNotePickerSearch] = useState('');
+  const notePickerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
+  useEffect(() => {
+    if (!notePicker) return;
+    const handler = (e) => { if (notePickerRef.current && !notePickerRef.current.contains(e.target)) { setNotePicker(false); setNotePickerSearch(''); } };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notePicker]);
+  const linkedNote = task.noteId && notesList ? notesList.find(n => n.id === task.noteId) : null;
   const rowCount = Math.max(1, (text || '').split('\n').length);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -362,8 +382,9 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
       </div>
-      {(projLabel || authorNick) && (
+      {(projLabel || authorNick || linkedNote) && (
         <div className="task-badges">
+          {linkedNote && <span className="task-note-badge" title={linkedNote.title}>📎</span>}
           {projLabel && <span className="task-tag" style={{ color: projLabel.color, borderColor: projLabel.color + '44' }}>{projLabel.name}</span>}
           {authorNick && (
             <span className="task-author" style={authorColor ? { borderColor: authorColor + '66', color: authorColor } : undefined}>
@@ -374,6 +395,30 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
         </div>
       )}
       <div className="task-actions">
+        {notesList && onLinkNote && (
+          <div className="task-link-wrap" ref={notePickerRef}>
+            <button className={`task-link-btn${linkedNote ? ' linked' : ''}`} title={linkedNote ? `Linked: ${linkedNote.title}` : 'Link to note'}
+              onClick={() => { if (linkedNote) { onUnlinkNote(task.id); } else { setNotePicker(v => !v); setNotePickerSearch(''); } }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </button>
+            {notePicker && (
+              <div className="task-note-picker">
+                <input className="task-note-picker-search" placeholder="Search notes..." value={notePickerSearch} autoFocus
+                  onChange={e => setNotePickerSearch(e.target.value)} onClick={e => e.stopPropagation()} />
+                <div className="task-note-picker-list">
+                  {(notesList || []).filter(n => !notePickerSearch || (n.title || '').toLowerCase().includes(notePickerSearch.toLowerCase())).slice(0, 8).map(n => (
+                    <button key={n.id} className="task-note-picker-item" onMouseDown={e => { e.preventDefault(); onLinkNote(task.id, n.id); setNotePicker(false); setNotePickerSearch(''); }}>
+                      {n.title || 'Untitled'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {canHide && (
           <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -517,6 +562,10 @@ export default function App() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const templatePickerRef = useRef(null);
   const noteTextareaRef = useRef(null);
+  const [slashMenu, setSlashMenu] = useState(null);
+  const slashMenuRef = useRef(null);
+  const [showGraph, setShowGraph] = useState(false);
+  const graphCanvasRef = useRef(null);
 
   const projects = data?.projects || EMPTY;
   // Precompile project detection regexes (only recomputed when projects change)
@@ -844,6 +893,31 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showTemplatePicker]);
 
+  // Close slash menu on outside click
+  useEffect(() => {
+    if (!slashMenu) return;
+    const handler = (e) => { if (slashMenuRef.current && !slashMenuRef.current.contains(e.target)) setSlashMenu(null); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [slashMenu]);
+
+  const applySlashCommand = useCallback((cmd) => {
+    const ta = noteTextareaRef.current;
+    if (!ta || !slashMenu) return;
+    const val = ta.value;
+    const pos = ta.selectionStart;
+    // Find the start of current line
+    const lineStart = val.lastIndexOf('\n', pos - 1) + 1;
+    // Replace /filter text on current line with command insert
+    const before = val.slice(0, lineStart);
+    const afterSlash = val.slice(pos);
+    const newContent = before + cmd.insert + afterSlash;
+    setNoteDraft(d => ({ ...d, content: newContent }));
+    saveNote(activeNote, noteDraft.title, newContent);
+    setSlashMenu(null);
+    requestAnimationFrame(() => { ta.focus(); const p = lineStart + cmd.cursor; ta.setSelectionRange(p, p); });
+  }, [slashMenu, activeNote, noteDraft.title, saveNote]);
+
   // Backlinks for the active note
   const activeNoteData = activeNote ? notesList.find(n => n.id === activeNote) : null;
   const backlinks = useMemo(() => {
@@ -852,6 +926,12 @@ export default function App() {
     if (!title) return [];
     return notesList.filter(n => n.id !== activeNote && n.links?.some(l => l.toLowerCase() === title));
   }, [notesList, activeNote, activeNoteData?.title]);
+
+  // Tasks linked to the active note
+  const linkedTasks = useMemo(() => {
+    if (!activeNote) return [];
+    return tasks.filter(t => t.noteId === activeNote);
+  }, [tasks, activeNote]);
 
   // Filtered notes for search
   const filteredNotes = useMemo(() => {
@@ -863,6 +943,282 @@ export default function App() {
       (n.tags || []).some(t => t.includes(q))
     );
   }, [notesList, noteSearch]);
+
+  // Graph data
+  const graphData = useMemo(() => {
+    if (!notesList.length) return { nodes: [], edges: [] };
+    const titleMap = new Map();
+    notesList.forEach(n => { if (n.title) titleMap.set(n.title.toLowerCase(), n.id); });
+    const edgeSet = new Set();
+    const edges = [];
+    const inCount = {};
+    notesList.forEach(n => {
+      (n.links || []).forEach(link => {
+        const targetId = titleMap.get(link.toLowerCase());
+        if (targetId && targetId !== n.id) {
+          const key = [n.id, targetId].sort().join(':');
+          if (!edgeSet.has(key)) { edgeSet.add(key); edges.push({ source: n.id, target: targetId }); }
+          inCount[targetId] = (inCount[targetId] || 0) + 1;
+          inCount[n.id] = (inCount[n.id] || 0) + 1;
+        }
+      });
+    });
+    const nodes = notesList.map(n => ({ id: n.id, title: n.title || 'Untitled', linkCount: inCount[n.id] || 0 }));
+    return { nodes, edges };
+  }, [notesList]);
+
+  // Graph force simulation
+  useEffect(() => {
+    if (!showGraph) return;
+    const canvas = graphCanvasRef.current;
+    if (!canvas) return;
+    const container = canvas.parentElement;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const resize = () => {
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+
+    const { nodes: gNodes, edges: gEdges } = graphData;
+    if (!gNodes.length) return;
+
+    const W = () => canvas.width / dpr;
+    const H = () => canvas.height / dpr;
+
+    // Init simulation nodes
+    const simNodes = gNodes.map((n, i) => ({
+      ...n,
+      x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
+      y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
+      vx: 0, vy: 0,
+      radius: 5 + Math.sqrt(n.linkCount) * 2.5,
+      opacity: 0,
+    }));
+    const nodeMap = new Map(simNodes.map(n => [n.id, n]));
+
+    // Camera
+    let zoom = 1, panX = 0, panY = 0;
+    let hoveredId = null, dragNode = null, isDragging = false;
+    let mouseX = 0, mouseY = 0;
+
+    const screenToWorld = (sx, sy) => ({ x: (sx - panX) / zoom, y: (sy - panY) / zoom });
+    const worldToScreen = (wx, wy) => ({ x: wx * zoom + panX, y: wy * zoom + panY });
+
+    const getNodeAt = (sx, sy) => {
+      const { x, y } = screenToWorld(sx, sy);
+      for (let i = simNodes.length - 1; i >= 0; i--) {
+        const n = simNodes[i];
+        const dx = n.x - x, dy = n.y - y;
+        if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+      }
+      return null;
+    };
+
+    // Mouse handlers
+    const onWheel = (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const newZoom = Math.max(0.2, Math.min(4, zoom * zoomFactor));
+      panX = mx - (mx - panX) * (newZoom / zoom);
+      panY = my - (my - panY) * (newZoom / zoom);
+      zoom = newZoom;
+    };
+
+    let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
+    const onMouseDown = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+      if (e.button === 1 || e.button === 2) {
+        isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY;
+        e.preventDefault(); return;
+      }
+      if (e.button === 0) {
+        const n = getNodeAt(mouseX, mouseY);
+        if (n) { dragNode = n; isDragging = false; e.preventDefault(); }
+      }
+    };
+    const onMouseMove = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); return; }
+      if (dragNode) {
+        isDragging = true;
+        const { x, y } = screenToWorld(mouseX, mouseY);
+        dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
+        return;
+      }
+      hoveredId = getNodeAt(mouseX, mouseY)?.id || null;
+      canvas.style.cursor = hoveredId ? 'pointer' : 'grab';
+    };
+    const onMouseUp = (e) => {
+      if (isPanning) { isPanning = false; return; }
+      if (dragNode && !isDragging) {
+        // Click on node → navigate to note
+        const nId = dragNode.id;
+        dragNode = null;
+        handleNoteClick(nId);
+        setShowGraph(false);
+        return;
+      }
+      dragNode = null; isDragging = false;
+    };
+    const onCtxMenu = (e) => e.preventDefault();
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('contextmenu', onCtxMenu);
+
+    // Neighbor set for hovered node
+    const getNeighbors = (nodeId) => {
+      const s = new Set();
+      gEdges.forEach(e => { if (e.source === nodeId) s.add(e.target); if (e.target === nodeId) s.add(e.source); });
+      return s;
+    };
+
+    let animId;
+    const draw = () => {
+      animId = requestAnimationFrame(draw);
+      const w = W(), h = H();
+
+      // Force simulation
+      for (let i = 0; i < simNodes.length; i++) {
+        const a = simNodes[i];
+        if (a === dragNode) continue;
+        // Centering
+        const cx = w / 2, cy = h / 2;
+        a.vx += (cx - a.x) * 0.01;
+        a.vy += (cy - a.y) * 0.01;
+        // Repulsion
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const b = simNodes[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minDist = a.radius + b.radius + 2;
+          if (dist < minDist) dist = minDist;
+          const force = 3000 / (dist * dist);
+          const fx = dx / dist * force, fy = dy / dist * force;
+          a.vx += fx; a.vy += fy;
+          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+        }
+      }
+      // Spring attraction along edges
+      gEdges.forEach(e => {
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - 100) * 0.04;
+        const fx = dx / dist * force, fy = dy / dist * force;
+        if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+        if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+      });
+      // Apply velocity
+      simNodes.forEach(n => {
+        if (n === dragNode) return;
+        n.vx *= 0.88; n.vy *= 0.88;
+        n.x += n.vx; n.y += n.vy;
+        if (n.opacity < 1) n.opacity = Math.min(1, n.opacity + 0.05);
+      });
+
+      // Draw
+      ctx.clearRect(0, 0, w, h);
+      // Background
+      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+      grad.addColorStop(0, '#0a0a0a');
+      grad.addColorStop(1, '#111');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const neighbors = hoveredId ? getNeighbors(hoveredId) : new Set();
+
+      // Edges
+      gEdges.forEach(e => {
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
+        const isHighlight = hoveredId && (e.source === hoveredId || e.target === hoveredId);
+        ctx.beginPath();
+        ctx.moveTo(sa.x, sa.y);
+        ctx.lineTo(sb.x, sb.y);
+        ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
+        ctx.lineWidth = isHighlight ? 1.5 : 1;
+        ctx.stroke();
+      });
+
+      // Nodes
+      simNodes.forEach(n => {
+        const { x: sx, y: sy } = worldToScreen(n.x, n.y);
+        const r = n.radius * zoom;
+        if (sx + r < 0 || sx - r > w || sy + r < 0 || sy - r > h) return;
+
+        const isActive = activeNote === n.id;
+        const isHovered = hoveredId === n.id;
+        const isNeighbor = hoveredId && neighbors.has(n.id);
+        const isDim = hoveredId && !isHovered && !isNeighbor && hoveredId !== n.id;
+
+        ctx.globalAlpha = n.opacity * (isDim ? 0.3 : 1);
+
+        // Glow
+        if (isActive || isHovered) {
+          ctx.shadowBlur = isActive ? 12 : 8;
+          ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
+        }
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = isHovered ? '#444' : isActive ? '#a78bfa33' : isNeighbor ? '#383838' : '#333';
+        ctx.fill();
+        ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // Label
+        if (zoom > 0.6) {
+          const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
+          ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
+          ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, sx, sy + r + 12);
+        }
+
+        ctx.globalAlpha = 1;
+      });
+
+      // Stats badge
+      ctx.font = "10px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = '#444';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${gNodes.length} notes · ${gEdges.length} connections`, 10, h - 10);
+    };
+
+    animId = requestAnimationFrame(draw);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      ro.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('contextmenu', onCtxMenu);
+    };
+  }, [showGraph, graphData, activeNote, handleNoteClick]);
 
   const createNote = useCallback(async (opts = {}) => {
     try {
@@ -1174,6 +1530,13 @@ export default function App() {
 
   const hideFromInbox = (id) => {
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, hiddenFromInbox: true } : t) }));
+  };
+
+  const linkTaskToNote = (taskId, noteId) => {
+    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, noteId } : t) }));
+  };
+  const unlinkTaskFromNote = (taskId) => {
+    up(p => ({ ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, noteId: undefined } : t) }));
   };
 
   const onSelectTask = (id, mode) => {
@@ -1491,7 +1854,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.8.0</span>
+          <span className="tp-ver">v1.9.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1717,6 +2080,7 @@ export default function App() {
 
       <main className="tp-body">
         {isNotes ? (
+          <>
           <div className="notes-container">
             {!activeNote ? (
               /* ─── Notes List View ─── */
@@ -1736,6 +2100,12 @@ export default function App() {
                     )}
                   </div>
                   <button className="notes-btn notes-btn-daily" onClick={openDailyNote}>Today</button>
+                  <button className="notes-btn notes-btn-graph" onClick={() => setShowGraph(true)} title="Graph View">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/>
+                      <line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/><line x1="8.5" y1="6" x2="15.5" y2="6"/>
+                    </svg>
+                  </button>
                 </div>
                 {!synced && <div className="notes-signin-hint">Sign in to use Notes</div>}
                 {synced && filteredNotes.length === 0 && (
@@ -1806,8 +2176,17 @@ export default function App() {
                 )}
                 <div className="notes-content-area">
                   {noteView === 'edit' ? (
+                    <>
                     <textarea ref={noteTextareaRef} className="notes-textarea" value={noteDraft.content} placeholder="Write in markdown... Use [[wikilinks]] and #tags"
                       onKeyDown={e => {
+                        // Slash menu navigation
+                        if (slashMenu) {
+                          const filtered = SLASH_COMMANDS.filter(c => c.name.toLowerCase().includes((slashMenu.filter || '').toLowerCase()));
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setSlashMenu(m => ({ ...m, selectedIdx: Math.min((m.selectedIdx || 0) + 1, filtered.length - 1) })); return; }
+                          if (e.key === 'ArrowUp') { e.preventDefault(); setSlashMenu(m => ({ ...m, selectedIdx: Math.max((m.selectedIdx || 0) - 1, 0) })); return; }
+                          if (e.key === 'Enter') { e.preventDefault(); if (filtered[slashMenu.selectedIdx || 0]) applySlashCommand(filtered[slashMenu.selectedIdx || 0]); return; }
+                          if (e.key === 'Escape') { e.preventDefault(); setSlashMenu(null); return; }
+                        }
                         const mod = e.ctrlKey || e.metaKey;
                         if (!mod) return;
                         const key = e.key.toLowerCase();
@@ -1822,7 +2201,38 @@ export default function App() {
                         const content = e.target.value;
                         setNoteDraft(d => ({ ...d, content }));
                         saveNote(activeNote, noteDraft.title, content);
+                        // Detect slash command trigger
+                        const ta = e.target;
+                        const pos = ta.selectionStart;
+                        const lineStart = content.lastIndexOf('\n', pos - 1) + 1;
+                        const lineText = content.slice(lineStart, pos);
+                        const slashMatch = lineText.match(/^\/(\S*)$/);
+                        if (slashMatch) {
+                          const rect = ta.getBoundingClientRect();
+                          const linesBefore = content.slice(0, lineStart).split('\n').length;
+                          const lineH = 20.8; // ~13px font * 1.6 line-height
+                          const top = (linesBefore * lineH) - ta.scrollTop + lineH + 4;
+                          setSlashMenu({ filter: slashMatch[1], selectedIdx: 0, top, left: 8 });
+                        } else {
+                          setSlashMenu(null);
+                        }
                       }} />
+                    {slashMenu && (() => {
+                      const filtered = SLASH_COMMANDS.filter(c => c.name.toLowerCase().includes((slashMenu.filter || '').toLowerCase()));
+                      if (!filtered.length) return null;
+                      return (
+                        <div className="slash-menu" ref={slashMenuRef} style={{ top: slashMenu.top, left: slashMenu.left }}>
+                          {filtered.map((cmd, i) => (
+                            <div key={cmd.name} className={`slash-menu-item${i === (slashMenu.selectedIdx || 0) ? ' selected' : ''}`}
+                              onMouseDown={e => { e.preventDefault(); applySlashCommand(cmd); }}>
+                              <span className="slash-menu-icon">{cmd.icon}</span>
+                              <span className="slash-menu-name">{cmd.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    </>
                   ) : (
                     <div className="notes-preview" dangerouslySetInnerHTML={{ __html: parseMarkdown(noteDraft.content) }}
                       onClick={e => {
@@ -1852,9 +2262,37 @@ export default function App() {
                     ))}
                   </div>
                 )}
+                {linkedTasks.length > 0 && (
+                  <div className="notes-backlinks">
+                    <div className="notes-backlinks-title">Linked Tasks</div>
+                    {linkedTasks.map(lt => {
+                      const proj = projects.find(p => p.id === lt.projectId);
+                      return (
+                        <div key={lt.id} className="notes-linked-task-item" onClick={() => { up(p => ({ ...p, activeTab: lt.projectId || INBOX_ID })); setActiveNote(null); }}>
+                          <span className={`notes-lt-status${lt.done ? ' done' : ''}`}>{lt.done ? '✓' : '○'}</span>
+                          <span className="notes-lt-text">{(lt.text || '').length > 50 ? lt.text.slice(0, 50) + '…' : lt.text}</span>
+                          {proj && <span className="notes-lt-proj" style={{ color: proj.color }}>{proj.name}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
+          {showGraph && (
+            <div className="tp-modal-backdrop" onMouseDown={() => setShowGraph(false)}>
+              <div className="graph-modal" onMouseDown={e => e.stopPropagation()}>
+                <div className="graph-modal-hdr">
+                  <span className="graph-modal-title">Graph View</span>
+                  <span className="graph-modal-stats">{graphData.nodes.length} notes · {graphData.edges.length} connections</span>
+                  <button className="tp-modal-x" onClick={() => setShowGraph(false)}>×</button>
+                </div>
+                <canvas className="graph-canvas" ref={graphCanvasRef} />
+              </div>
+            </div>
+          )}
+          </>
         ) : (
         <>
         {total > 0 && (
@@ -2061,6 +2499,7 @@ export default function App() {
                   isTeam={isTeamTab} nicknames={teamProjData?.nicknames} avatars={teamProjData?.avatars}
                   onToggle={toggleTask} onDelete={deleteTask} onChange={changeTask}
                   onHide={isInbox ? hideFromInbox : null}
+                  notesList={isTeamTab ? undefined : notesList} onLinkNote={linkTaskToNote} onUnlinkNote={unlinkTaskFromNote}
                   isSelecting={selectedIds.size > 0}
                   selected={selectedIds.has(task.id)} onSelect={onSelectTask}
                   onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
