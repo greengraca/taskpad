@@ -261,7 +261,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const inputRef = useRef(null);
   const textRef = useRef(null);
   const touchTimerRef = useRef(null);
-  useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); const measure = () => { el.style.height = '0'; el.style.height = el.scrollHeight + 'px'; }; requestAnimationFrame(measure); setTimeout(measure, 100); } }, [editing]);
+  useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
   const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
@@ -364,9 +364,11 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
       <div className="task-body" onMouseDown={handleBodyMouseDown} onClick={handleBodyClick}
         onTouchStart={handleBodyTouchStart} onTouchEnd={handleBodyTouchEnd} onTouchMove={handleBodyTouchMove}>
         {editing ? (
-          <textarea ref={inputRef} className="task-input" rows={1} value={text}
-            onChange={e => { setText(e.target.value); const el = e.target; el.style.height = '0'; el.style.height = el.scrollHeight + 'px'; }} onBlur={commit}
-            onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
+          <div className="grow-wrap" data-replicated-value={text + ' '}>
+            <textarea ref={inputRef} className="task-input" rows={1} value={text}
+              onChange={e => { setText(e.target.value); }} onBlur={commit}
+              onKeyDown={e => { if (insertBullet(e)) return; if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setEditing(false); setText(task.text); } }} />
+          </div>
         ) : (
           <span className="task-text" ref={textRef} style={{ whiteSpace: 'pre-wrap' }}>{task.text}</span>
         )}
