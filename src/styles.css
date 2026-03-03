@@ -268,7 +268,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 /* Notes list view */
 .notes-list-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .notes-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px 8px; flex-shrink: 0; }
-.notes-search { flex: 1; background: #0b0b0b; border: 1px solid #252525; border-radius: 8px; padding: 8px 12px; color: var(--t); font-family: var(--fm); font-size: 12px; outline: none; }
+.notes-search { flex: 1; min-width: 0; background: #0b0b0b; border: 1px solid #252525; border-radius: 8px; padding: 8px 12px; color: var(--t); font-family: var(--fm); font-size: 12px; outline: none; }
 .notes-search:focus { border-color: #a78bfa; }
 .notes-search::placeholder { color: #444; }
 .notes-btn { background: #141414; border: 1px solid #2a2a2a; color: #bbb; font-family: var(--fm); font-size: 11px; padding: 7px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
