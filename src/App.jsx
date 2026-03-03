@@ -37,6 +37,13 @@ const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const EMPTY = [];
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const NOTE_TEMPLATES = [
+  { name: 'Blank', title: 'Untitled', content: '' },
+  { name: 'Meeting Notes', title: 'Meeting Notes', content: `## Attendees\n- \n\n## Agenda\n- [ ] \n\n## Notes\n\n\n## Action Items\n- [ ] \n- [ ] \n` },
+  { name: 'Project Plan', title: 'Project Plan', content: `## Overview\n\n\n## Goals\n- [ ] \n- [ ] \n- [ ] \n\n## Tasks\n- [ ] \n- [ ] \n- [ ] \n\n## Timeline\n| Phase | Target Date | Status |\n|-------|------------|--------|\n| Planning | | |\n| Development | | |\n| Review | | |\n` },
+  { name: 'Weekly Review', title: 'Weekly Review', content: `## Wins\n- \n\n## Challenges\n- \n\n## Next Week\n- [ ] \n- [ ] \n- [ ] \n\n## Notes\n\n` },
+];
+
 // ─── Pixel art avatars ───
 const AVATARS = [
   { id: 0, name: 'Knight', color: '#ef4444', src: '/avatars/0.svg' },
@@ -507,6 +514,8 @@ export default function App() {
   const [noteDraft, setNoteDraft] = useState({ title: '', content: '' });
   const noteSaveRef = useRef(null);
   const [noteDeleteConfirm, setNoteDeleteConfirm] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const templatePickerRef = useRef(null);
   const noteTextareaRef = useRef(null);
 
   const projects = data?.projects || EMPTY;
@@ -798,6 +807,12 @@ export default function App() {
     } else if (type === 'wikilink') {
       insert = has ? `[[${sel}]]` : '[[]]';
       cursorStart = cursorEnd = has ? s + insert.length : s + 2;
+    } else if (type === 'strikethrough') {
+      insert = has ? `~~${sel}~~` : '~~~~';
+      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
+    } else if (type === 'highlight') {
+      insert = has ? `==${sel}==` : '====';
+      cursorStart = cursorEnd = has ? s + insert.length : s + 2;
     } else return;
 
     const newContent = before + insert + after;
@@ -818,6 +833,16 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [activeNote, activeProject]);
+
+  // Close template picker on click outside
+  useEffect(() => {
+    if (!showTemplatePicker) return;
+    const handler = (e) => {
+      if (templatePickerRef.current && !templatePickerRef.current.contains(e.target)) setShowTemplatePicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTemplatePicker]);
 
   // Backlinks for the active note
   const activeNoteData = activeNote ? notesList.find(n => n.id === activeNote) : null;
@@ -1466,7 +1491,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.7.4</span>
+          <span className="tp-ver">v1.8.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1698,7 +1723,18 @@ export default function App() {
               <div className="notes-list-view">
                 <div className="notes-toolbar">
                   <input className="notes-search" placeholder="Search notes..." value={noteSearch} onChange={e => setNoteSearch(e.target.value)} />
-                  <button className="notes-btn" onClick={() => createNote()}>+ New</button>
+                  <div className="notes-new-wrap" ref={templatePickerRef}>
+                    <button className="notes-btn" onClick={() => setShowTemplatePicker(v => !v)}>+ New</button>
+                    {showTemplatePicker && (
+                      <div className="notes-template-picker">
+                        {NOTE_TEMPLATES.map(tpl => (
+                          <button key={tpl.name} className="notes-template-item" onClick={() => { createNote({ title: tpl.title, content: tpl.content }); setShowTemplatePicker(false); }}>
+                            {tpl.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button className="notes-btn notes-btn-daily" onClick={openDailyNote}>Today</button>
                 </div>
                 {!synced && <div className="notes-signin-hint">Sign in to use Notes</div>}
@@ -1755,7 +1791,9 @@ export default function App() {
                   <div className="notes-fmt-bar">
                     <button className="notes-fmt-btn" title="Bold (Ctrl+B)" onClick={() => applyFormat('bold')}><b>B</b></button>
                     <button className="notes-fmt-btn" title="Italic (Ctrl+I)" onClick={() => applyFormat('italic')}><i>I</i></button>
-                    <button className="notes-fmt-btn" title="Heading" onClick={() => applyFormat('heading')}>H</button>
+                    <button className="notes-fmt-btn" title="Strikethrough (Ctrl+Shift+X)" onClick={() => applyFormat('strikethrough')}><s>S</s></button>
+                    <button className="notes-fmt-btn" title="Highlight (Ctrl+Shift+H)" onClick={() => applyFormat('highlight')}>H<span style={{fontSize:8,color:'#ffd000'}}>i</span></button>
+                    <button className="notes-fmt-btn" title="Heading" onClick={() => applyFormat('heading')}>H#</button>
                     <span className="notes-fmt-sep" />
                     <button className="notes-fmt-btn" title="Link (Ctrl+K)" onClick={() => applyFormat('link')}>🔗</button>
                     <button className="notes-fmt-btn" title="Code (Ctrl+`)" onClick={() => applyFormat('code')}>&lt;/&gt;</button>
@@ -1777,6 +1815,8 @@ export default function App() {
                         else if (key === 'i') { e.preventDefault(); applyFormat('italic'); }
                         else if (key === 'k') { e.preventDefault(); applyFormat('link'); }
                         else if (key === '`') { e.preventDefault(); applyFormat('code'); }
+                        else if (key === 'x' && e.shiftKey) { e.preventDefault(); applyFormat('strikethrough'); }
+                        else if (key === 'h' && e.shiftKey) { e.preventDefault(); applyFormat('highlight'); }
                       }}
                       onChange={e => {
                         const content = e.target.value;
@@ -1787,7 +1827,18 @@ export default function App() {
                     <div className="notes-preview" dangerouslySetInnerHTML={{ __html: parseMarkdown(noteDraft.content) }}
                       onClick={e => {
                         const wl = e.target.closest('.note-wikilink');
-                        if (wl) { e.preventDefault(); handleWikilinkClick(wl.dataset.note); }
+                        if (wl) { e.preventDefault(); handleWikilinkClick(wl.dataset.note); return; }
+                        // Interactive checkboxes
+                        if (e.target.matches('input[data-checkbox]')) {
+                          const idx = parseInt(e.target.dataset.checkbox, 10);
+                          let count = 0;
+                          const newContent = noteDraft.content.replace(/- \[([ xX])\]/g, (match, ch) => {
+                            if (count++ === idx) return ch === ' ' ? '- [x]' : '- [ ]';
+                            return match;
+                          });
+                          setNoteDraft(d => ({ ...d, content: newContent }));
+                          saveNote(activeNote, noteDraft.title, newContent);
+                        }
                       }} />
                   )}
                 </div>
