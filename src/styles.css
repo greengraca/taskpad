@@ -54,7 +54,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-t { background: none; border: none; border-bottom: 2px solid transparent; color: var(--td); font-family: var(--fu); font-size: 13px; font-weight: 500; padding: 10px 14px 8px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .15s, border-color .15s; user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
 .tp-t:hover { color: #999; }
 .tp-t.tp-t-on, .tp-t.tp-t-on:hover { color: #e8e8e8; }
-.tp-t-special { font-weight: 600; letter-spacing: -0.2px; border-radius: 8px 8px 0 0; margin: 0 2px; position: relative; }
+.tp-t-special { font-weight: 600; letter-spacing: -0.2px; margin: 0 2px; position: relative; }
 .tp-t-special .tp-t-icon { display: block; flex-shrink: 0; opacity: 0.7; }
 .tp-t-special .tp-td { display: none; }
 .tp-t-special.tp-t-on .tp-t-icon { opacity: 1; }
@@ -157,7 +157,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .task-text { font-size: 13px; font-family: var(--fm); font-weight: 400; line-height: 1.4; word-break: break-word; color: var(--t); }
 .task-done .task-text { text-decoration: line-through; color: #777; }
 .task-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; align-self: center; flex-shrink: 0; }
-.task-input { flex: 1; min-width: 100px; width: 100%; background: transparent; border: none; border-bottom: 1px solid #333; padding: 2px 0; color: var(--t); font-family: var(--fm); font-size: 13px; outline: none; resize: none; overflow: hidden; line-height: 1.4; }
+.task-input { flex: 1; min-width: 100px; width: 100%; background: transparent; border: none; border-bottom: 1px solid #333; padding: 2px 0; color: var(--t); font-family: var(--fm); font-size: 13px; outline: none; resize: none; overflow: hidden; line-height: 1.4; height: auto; }
 .task-tag { font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
 
 /* Author tag with avatar color */
@@ -476,7 +476,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   .kw-in, .tp-modal input { font-size: 16px; }
   .tp-t-edit { font-size: 13px; }
   .task-text { font-size: 12px; }
-  .task-input { font-size: 12px; overflow: visible; }
+  .task-input { font-size: 12px; }
 }
 
 @media (display-mode: standalone) {
