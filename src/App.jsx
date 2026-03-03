@@ -1028,7 +1028,11 @@ export default function App() {
       for (let i = simNodes.length - 1; i >= 0; i--) {
         const n = simNodes[i];
         const dx = n.x - x, dy = n.y - y;
-        if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+        const hitR = Math.max(n.radius + 8, 18);
+        // Circle hitbox for the node itself
+        if (dx * dx + dy * dy < hitR * hitR) return n;
+        // Rectangular hitbox for the label below (extends ~22px below node center)
+        if (Math.abs(dx) < hitR + 20 && dy > 0 && dy < n.radius + 24) return n;
       }
       return null;
     };

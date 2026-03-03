@@ -25,7 +25,7 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      allow read: if isProjectMember(projectId);
+      allow read: if isSignedIn() && request.auth.uid in resource.data.memberUids;
 
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
 
