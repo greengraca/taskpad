@@ -1362,6 +1362,22 @@ export default function App() {
   // ─── Tab touch long-press (iOS context menu) ───
   const tabTouchRef = useRef({ timer: null, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
 
+  // Project-Note linking (hooks must be before early return)
+  const linkNoteToProject = useCallback((noteId, projectId) => {
+    updatePersonalNote({ noteId, patch: { projectId } }).catch(e => console.warn('Link note failed:', e));
+  }, []);
+  const unlinkNoteFromProject = useCallback((noteId) => {
+    updatePersonalNote({ noteId, patch: { projectId: null } }).catch(e => console.warn('Unlink note failed:', e));
+  }, []);
+  const projectNotes = useMemo(() => {
+    if (!data || !notesList.length) return EMPTY;
+    const at = data?.activeTab;
+    if (!at || at === INBOX_ID || at === NOTES_ID) return EMPTY;
+    const proj = (data?.projects || []).find(p => p.id === at);
+    if (proj?.isTeam) return EMPTY;
+    return notesList.filter(n => n.projectId === at);
+  }, [notesList, data]);
+
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
   // ─── Task operations ───
@@ -1483,20 +1499,6 @@ export default function App() {
   const hideFromInbox = (id) => {
     up(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, hiddenFromInbox: true } : t) }));
   };
-
-  // Project-Note linking
-  const linkNoteToProject = useCallback((noteId, projectId) => {
-    updatePersonalNote({ noteId, patch: { projectId } }).catch(e => console.warn('Link note failed:', e));
-  }, []);
-  const unlinkNoteFromProject = useCallback((noteId) => {
-    updatePersonalNote({ noteId, patch: { projectId: null } }).catch(e => console.warn('Unlink note failed:', e));
-  }, []);
-
-  // Notes linked to the active project
-  const projectNotes = useMemo(() => {
-    if (isNotes || isTeamTab || !activeTab || activeTab === INBOX_ID) return [];
-    return notesList.filter(n => n.projectId === activeTab);
-  }, [notesList, activeTab, isNotes, isTeamTab]);
 
   const onSelectTask = (id, mode) => {
     setSelectedIds(prev => {
