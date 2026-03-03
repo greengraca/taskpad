@@ -967,259 +967,6 @@ export default function App() {
     return { nodes, edges };
   }, [notesList]);
 
-  // Graph force simulation
-  useEffect(() => {
-    if (!showGraph) return;
-    const canvas = graphCanvasRef.current;
-    if (!canvas) return;
-    const container = canvas.parentElement;
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-
-    const resize = () => {
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-
-    const { nodes: gNodes, edges: gEdges } = graphData;
-    if (!gNodes.length) return;
-
-    const W = () => canvas.width / dpr;
-    const H = () => canvas.height / dpr;
-
-    // Init simulation nodes
-    const simNodes = gNodes.map((n, i) => ({
-      ...n,
-      x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
-      y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
-      vx: 0, vy: 0,
-      radius: 5 + Math.sqrt(n.linkCount) * 2.5,
-      opacity: 0,
-    }));
-    const nodeMap = new Map(simNodes.map(n => [n.id, n]));
-
-    // Camera
-    let zoom = 1, panX = 0, panY = 0;
-    let hoveredId = null, dragNode = null, isDragging = false;
-    let mouseX = 0, mouseY = 0;
-
-    const screenToWorld = (sx, sy) => ({ x: (sx - panX) / zoom, y: (sy - panY) / zoom });
-    const worldToScreen = (wx, wy) => ({ x: wx * zoom + panX, y: wy * zoom + panY });
-
-    const getNodeAt = (sx, sy) => {
-      const { x, y } = screenToWorld(sx, sy);
-      for (let i = simNodes.length - 1; i >= 0; i--) {
-        const n = simNodes[i];
-        const dx = n.x - x, dy = n.y - y;
-        if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
-      }
-      return null;
-    };
-
-    // Mouse handlers
-    const onWheel = (e) => {
-      e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newZoom = Math.max(0.2, Math.min(4, zoom * zoomFactor));
-      panX = mx - (mx - panX) * (newZoom / zoom);
-      panY = my - (my - panY) * (newZoom / zoom);
-      zoom = newZoom;
-    };
-
-    let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
-    const onMouseDown = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
-      if (e.button === 1 || e.button === 2) {
-        isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY;
-        e.preventDefault(); return;
-      }
-      if (e.button === 0) {
-        const n = getNodeAt(mouseX, mouseY);
-        if (n) { dragNode = n; isDragging = false; e.preventDefault(); }
-      }
-    };
-    const onMouseMove = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
-      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); return; }
-      if (dragNode) {
-        isDragging = true;
-        const { x, y } = screenToWorld(mouseX, mouseY);
-        dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
-        return;
-      }
-      hoveredId = getNodeAt(mouseX, mouseY)?.id || null;
-      canvas.style.cursor = hoveredId ? 'pointer' : 'grab';
-    };
-    const onMouseUp = (e) => {
-      if (isPanning) { isPanning = false; return; }
-      if (dragNode && !isDragging) {
-        // Click on node → navigate to note
-        const nId = dragNode.id;
-        dragNode = null;
-        handleNoteClick(nId);
-        setShowGraph(false);
-        return;
-      }
-      dragNode = null; isDragging = false;
-    };
-    const onCtxMenu = (e) => e.preventDefault();
-
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('contextmenu', onCtxMenu);
-
-    // Neighbor set for hovered node
-    const getNeighbors = (nodeId) => {
-      const s = new Set();
-      gEdges.forEach(e => { if (e.source === nodeId) s.add(e.target); if (e.target === nodeId) s.add(e.source); });
-      return s;
-    };
-
-    let animId;
-    const draw = () => {
-      animId = requestAnimationFrame(draw);
-      const w = W(), h = H();
-
-      // Force simulation
-      for (let i = 0; i < simNodes.length; i++) {
-        const a = simNodes[i];
-        if (a === dragNode) continue;
-        // Centering
-        const cx = w / 2, cy = h / 2;
-        a.vx += (cx - a.x) * 0.01;
-        a.vy += (cy - a.y) * 0.01;
-        // Repulsion
-        for (let j = i + 1; j < simNodes.length; j++) {
-          const b = simNodes[j];
-          let dx = a.x - b.x, dy = a.y - b.y;
-          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const minDist = a.radius + b.radius + 2;
-          if (dist < minDist) dist = minDist;
-          const force = 3000 / (dist * dist);
-          const fx = dx / dist * force, fy = dy / dist * force;
-          a.vx += fx; a.vy += fy;
-          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
-        }
-      }
-      // Spring attraction along edges
-      gEdges.forEach(e => {
-        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
-        if (!a || !b) return;
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = (dist - 100) * 0.04;
-        const fx = dx / dist * force, fy = dy / dist * force;
-        if (a !== dragNode) { a.vx += fx; a.vy += fy; }
-        if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
-      });
-      // Apply velocity
-      simNodes.forEach(n => {
-        if (n === dragNode) return;
-        n.vx *= 0.88; n.vy *= 0.88;
-        n.x += n.vx; n.y += n.vy;
-        if (n.opacity < 1) n.opacity = Math.min(1, n.opacity + 0.05);
-      });
-
-      // Draw
-      ctx.clearRect(0, 0, w, h);
-      // Background
-      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-      grad.addColorStop(0, '#0a0a0a');
-      grad.addColorStop(1, '#111');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      const neighbors = hoveredId ? getNeighbors(hoveredId) : new Set();
-
-      // Edges
-      gEdges.forEach(e => {
-        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
-        if (!a || !b) return;
-        const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
-        const isHighlight = hoveredId && (e.source === hoveredId || e.target === hoveredId);
-        ctx.beginPath();
-        ctx.moveTo(sa.x, sa.y);
-        ctx.lineTo(sb.x, sb.y);
-        ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
-        ctx.lineWidth = isHighlight ? 1.5 : 1;
-        ctx.stroke();
-      });
-
-      // Nodes
-      simNodes.forEach(n => {
-        const { x: sx, y: sy } = worldToScreen(n.x, n.y);
-        const r = n.radius * zoom;
-        if (sx + r < 0 || sx - r > w || sy + r < 0 || sy - r > h) return;
-
-        const isActive = activeNote === n.id;
-        const isHovered = hoveredId === n.id;
-        const isNeighbor = hoveredId && neighbors.has(n.id);
-        const isDim = hoveredId && !isHovered && !isNeighbor && hoveredId !== n.id;
-
-        ctx.globalAlpha = n.opacity * (isDim ? 0.3 : 1);
-
-        // Glow
-        if (isActive || isHovered) {
-          ctx.shadowBlur = isActive ? 12 : 8;
-          ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
-        }
-
-        ctx.beginPath();
-        ctx.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#444' : isActive ? '#a78bfa33' : isNeighbor ? '#383838' : '#333';
-        ctx.fill();
-        ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-
-        // Label
-        if (zoom > 0.6) {
-          const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
-          ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
-          ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
-          ctx.textAlign = 'center';
-          ctx.fillText(label, sx, sy + r + 12);
-        }
-
-        ctx.globalAlpha = 1;
-      });
-
-      // Stats badge
-      ctx.font = "10px 'IBM Plex Mono', monospace";
-      ctx.fillStyle = '#444';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${gNodes.length} notes · ${gEdges.length} connections`, 10, h - 10);
-    };
-
-    animId = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(animId);
-      ro.disconnect();
-      canvas.removeEventListener('wheel', onWheel);
-      canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('contextmenu', onCtxMenu);
-    };
-  }, [showGraph, graphData, activeNote, handleNoteClick]);
-
   const createNote = useCallback(async (opts = {}) => {
     try {
       const id = await createPersonalNote({
@@ -1262,6 +1009,242 @@ export default function App() {
       setNoteDeleteConfirm(false);
     }
   }, [notesList]);
+
+  // Graph force simulation
+  useEffect(() => {
+    if (!showGraph) return;
+    const canvas = graphCanvasRef.current;
+    if (!canvas) return;
+    const container = canvas.parentElement;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const resize = () => {
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+
+    const { nodes: gNodes, edges: gEdges } = graphData;
+    if (!gNodes.length) return;
+
+    const W = () => canvas.width / dpr;
+    const H = () => canvas.height / dpr;
+
+    const simNodes = gNodes.map((n) => ({
+      ...n,
+      x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
+      y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
+      vx: 0, vy: 0,
+      radius: 5 + Math.sqrt(n.linkCount) * 2.5,
+      opacity: 0,
+    }));
+    const nodeMap = new Map(simNodes.map(n => [n.id, n]));
+
+    let zoom = 1, panX = 0, panY = 0;
+    let hoveredId = null, dragNode = null, isDragging = false;
+    let mouseX = 0, mouseY = 0;
+
+    const screenToWorld = (sx, sy) => ({ x: (sx - panX) / zoom, y: (sy - panY) / zoom });
+    const worldToScreen = (wx, wy) => ({ x: wx * zoom + panX, y: wy * zoom + panY });
+
+    const getNodeAt = (sx, sy) => {
+      const { x, y } = screenToWorld(sx, sy);
+      for (let i = simNodes.length - 1; i >= 0; i--) {
+        const n = simNodes[i];
+        const dx = n.x - x, dy = n.y - y;
+        if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+      }
+      return null;
+    };
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const newZoom = Math.max(0.2, Math.min(4, zoom * zoomFactor));
+      panX = mx - (mx - panX) * (newZoom / zoom);
+      panY = my - (my - panY) * (newZoom / zoom);
+      zoom = newZoom;
+    };
+
+    let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
+    const onMouseDown = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+      if (e.button === 1 || e.button === 2) {
+        isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY;
+        e.preventDefault(); return;
+      }
+      if (e.button === 0) {
+        const n = getNodeAt(mouseX, mouseY);
+        if (n) { dragNode = n; isDragging = false; e.preventDefault(); }
+      }
+    };
+    const onMouseMove = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); return; }
+      if (dragNode) {
+        isDragging = true;
+        const { x, y } = screenToWorld(mouseX, mouseY);
+        dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
+        return;
+      }
+      hoveredId = getNodeAt(mouseX, mouseY)?.id || null;
+      canvas.style.cursor = hoveredId ? 'pointer' : 'grab';
+    };
+    const onMouseUp = () => {
+      if (isPanning) { isPanning = false; return; }
+      if (dragNode && !isDragging) {
+        const nId = dragNode.id;
+        dragNode = null;
+        handleNoteClick(nId);
+        setShowGraph(false);
+        return;
+      }
+      dragNode = null; isDragging = false;
+    };
+    const onCtxMenu = (e) => e.preventDefault();
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('contextmenu', onCtxMenu);
+
+    const getNeighbors = (nodeId) => {
+      const s = new Set();
+      gEdges.forEach(e => { if (e.source === nodeId) s.add(e.target); if (e.target === nodeId) s.add(e.source); });
+      return s;
+    };
+
+    let animId;
+    const draw = () => {
+      animId = requestAnimationFrame(draw);
+      const w = W(), h = H();
+
+      for (let i = 0; i < simNodes.length; i++) {
+        const a = simNodes[i];
+        if (a === dragNode) continue;
+        const cx = w / 2, cy = h / 2;
+        a.vx += (cx - a.x) * 0.01;
+        a.vy += (cy - a.y) * 0.01;
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const b = simNodes[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minDist = a.radius + b.radius + 2;
+          if (dist < minDist) dist = minDist;
+          const force = 3000 / (dist * dist);
+          const fx = dx / dist * force, fy = dy / dist * force;
+          a.vx += fx; a.vy += fy;
+          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+        }
+      }
+      gEdges.forEach(e => {
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - 100) * 0.04;
+        const fx = dx / dist * force, fy = dy / dist * force;
+        if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+        if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+      });
+      simNodes.forEach(n => {
+        if (n === dragNode) return;
+        n.vx *= 0.88; n.vy *= 0.88;
+        n.x += n.vx; n.y += n.vy;
+        if (n.opacity < 1) n.opacity = Math.min(1, n.opacity + 0.05);
+      });
+
+      ctx.clearRect(0, 0, w, h);
+      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+      grad.addColorStop(0, '#0a0a0a');
+      grad.addColorStop(1, '#111');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const neighbors = hoveredId ? getNeighbors(hoveredId) : new Set();
+
+      gEdges.forEach(e => {
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
+        const isHighlight = hoveredId && (e.source === hoveredId || e.target === hoveredId);
+        ctx.beginPath();
+        ctx.moveTo(sa.x, sa.y);
+        ctx.lineTo(sb.x, sb.y);
+        ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
+        ctx.lineWidth = isHighlight ? 1.5 : 1;
+        ctx.stroke();
+      });
+
+      simNodes.forEach(n => {
+        const { x: sx, y: sy } = worldToScreen(n.x, n.y);
+        const r = n.radius * zoom;
+        if (sx + r < 0 || sx - r > w || sy + r < 0 || sy - r > h) return;
+
+        const isActive = activeNote === n.id;
+        const isHovered = hoveredId === n.id;
+        const isNeighbor = hoveredId && neighbors.has(n.id);
+        const isDim = hoveredId && !isHovered && !isNeighbor && hoveredId !== n.id;
+
+        ctx.globalAlpha = n.opacity * (isDim ? 0.3 : 1);
+
+        if (isActive || isHovered) {
+          ctx.shadowBlur = isActive ? 12 : 8;
+          ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
+        }
+
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = isHovered ? '#444' : isActive ? '#a78bfa33' : isNeighbor ? '#383838' : '#333';
+        ctx.fill();
+        ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        if (zoom > 0.6) {
+          const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
+          ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
+          ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, sx, sy + r + 12);
+        }
+
+        ctx.globalAlpha = 1;
+      });
+
+      ctx.font = "10px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = '#444';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${gNodes.length} notes · ${gEdges.length} connections`, 10, h - 10);
+    };
+
+    animId = requestAnimationFrame(draw);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      ro.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('contextmenu', onCtxMenu);
+    };
+  }, [showGraph, graphData, activeNote, handleNoteClick]);
 
   const handleWikilinkClick = useCallback((noteName) => {
     const existing = notesList.find(n => (n.title || '').toLowerCase() === noteName.toLowerCase());
