@@ -385,7 +385,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
       )}
       <div className="task-actions">
         {canHide && (
-          <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from inbox">
+          <button onClick={() => onHide(task.id)} className="hide-btn" title="Hide from Cockpit">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
               <circle cx="12" cy="12" r="3"/>
@@ -1900,13 +1900,15 @@ export default function App() {
 
       {/* ─── Nav with draggable tabs ─── */}
       <nav className="tp-nav"><div className="tp-nav-scroll">
-        <button className={`tp-t ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
-          <span className="tp-td" style={{ background: '#38bdf8' }} />Inbox
-          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
-        </button>
-        <button className={`tp-t ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
-          <span className="tp-td" style={{ background: '#a78bfa' }} />Notes
+        <button className={`tp-t tp-t-special ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
+          <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Notes
           {notesList.length > 0 && <span className="tp-tc">{notesList.length}</span>}
+        </button>
+        <button className={`tp-t tp-t-special ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
+          <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Cockpit
+          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
@@ -2475,7 +2477,7 @@ export default function App() {
         )}
 
         <div className={`tp-tasks${isTaskDragging ? ' dragging' : ''}`} ref={containerRef} onClick={(e) => { if (!e.ctrlKey && !e.metaKey && selectedIds.size > 0 && !dragSelectRef.current.justEnded) setSelectedIds(new Set()); }}>
-          {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Inbox is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
+          {sortedVisible.length === 0 && <div className="tp-empty" onClick={() => insertTask(null)}><span style={{ fontSize: 28, opacity: 0.25 }}>📝</span><span>{isInbox ? 'Cockpit is empty — click here to start' : 'No tasks yet — click to add'}</span></div>}
           {sortedVisible.length > 0 && !isTaskDragging && <InsertZone onClick={() => insertTask(null)} color={accent} />}
           {sortedVisible.map((task, idx) => {
             const isNewTeam = newTeamTaskIds.current.has(task.id);
