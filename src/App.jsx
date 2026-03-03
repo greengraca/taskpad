@@ -823,7 +823,7 @@ export default function App() {
 
   // Ctrl+E to toggle edit/preview when a note is open
   useEffect(() => {
-    if (!activeNote || activeProject !== NOTES_ID) return;
+    if (!activeNote || activeTab !== NOTES_ID) return;
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
         e.preventDefault();
@@ -832,7 +832,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeNote, activeProject]);
+  }, [activeNote, activeTab]);
 
   // Close template picker on click outside
   useEffect(() => {
