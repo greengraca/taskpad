@@ -3,7 +3,7 @@
   "subtitle": "Your tasks, everywhere — PWA and desktop in one codebase",
   "description": "A task manager built for speed and real-time collaboration. Local-first optimistic updates keep the UI instant while Firestore syncs everything in the background. Ships as both a PWA on Vercel and a native desktop app via Tauri, from a single React codebase with zero state libraries.",
   "details": [
-    "Real-time team collaboration with shared projects, invites, and pixel-art avatars",
+    "Real-time team collaboration with shared projects, pixel-art avatars and encrypted password vault",
     "Built-in notes system with Markdown rendering and wikilink navigation",
     "Local-first architecture — optimistic updates with debounced cloud sync",
     "Custom drag-and-drop hooks for task, tab, and shortcut reordering",
