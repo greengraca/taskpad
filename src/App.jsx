@@ -1900,12 +1900,12 @@ export default function App() {
 
       {/* ─── Nav with draggable tabs ─── */}
       <nav className="tp-nav"><div className="tp-nav-scroll">
-        <button className={`tp-t tp-t-special ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
+        <button className={`tp-t tp-t-special tp-t-notes ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           Notes
           {notesList.length > 0 && <span className="tp-tc">{notesList.length}</span>}
         </button>
-        <button className={`tp-t tp-t-special ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
+        <button className={`tp-t tp-t-special tp-t-cockpit ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cockpit
           {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}

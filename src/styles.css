@@ -54,9 +54,16 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-t { background: none; border: none; border-bottom: 2px solid transparent; color: var(--td); font-family: var(--fu); font-size: 13px; font-weight: 500; padding: 10px 14px 8px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .15s, border-color .15s; user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
 .tp-t:hover { color: #999; }
 .tp-t.tp-t-on, .tp-t.tp-t-on:hover { color: #e8e8e8; }
-.tp-t-special { font-weight: 600; letter-spacing: -0.2px; }
-.tp-t-special .tp-t-icon { display: block; flex-shrink: 0; }
+.tp-t-special { font-weight: 600; letter-spacing: -0.2px; border-radius: 8px 8px 0 0; margin: 0 2px; position: relative; }
+.tp-t-special .tp-t-icon { display: block; flex-shrink: 0; opacity: 0.7; }
 .tp-t-special .tp-td { display: none; }
+.tp-t-special.tp-t-on .tp-t-icon { opacity: 1; }
+.tp-t-notes { background: #a78bfa06; border-left: 1px solid #a78bfa10; border-right: 1px solid #a78bfa10; border-top: 1px solid #a78bfa10; }
+.tp-t-notes:hover { background: #a78bfa0c; color: #c4b5fd; }
+.tp-t-notes.tp-t-on { background: #a78bfa0f; }
+.tp-t-cockpit { background: #38bdf806; border-left: 1px solid #38bdf810; border-right: 1px solid #38bdf810; border-top: 1px solid #38bdf810; }
+.tp-t-cockpit:hover { background: #38bdf80c; color: #7dd3fc; }
+.tp-t-cockpit.tp-t-on { background: #38bdf80f; }
 .tp-td { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .tp-tc { font-size: 10px; font-weight: 600; color: #888; background: var(--b); padding: 1px 6px; border-radius: 8px; }
 .tp-t-edit { color: #e8e8e8; background: #141414; outline: none; border-radius: 0; }
