@@ -6,7 +6,7 @@
 
 A lightning-fast task manager built for speed and real-time collaboration. Local-first optimistic updates keep the UI instant while Firestore syncs everything in the background.
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-taskpad--phi.vercel.app-F59E0B?style=for-the-badge&logo=vercel&logoColor=white)](https://taskpad-phi.vercel.app/)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-taskpad--phi.vercel.app-F59E0B?style=flat-square&logo=vercel&logoColor=white)](https://taskpad-phi.vercel.app/)
 [![Built with React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com)
@@ -237,14 +237,3 @@ public/
 | `Ctrl+Shift+H` | Highlight (notes) |
 | `/` | Slash commands (notes) |
 
----
-
-## License
-
-This project is private. All rights reserved.
-
----
-
-<div align="center">
-<sub>Built with care using React, Firebase, and Tauri.</sub>
-</div>
