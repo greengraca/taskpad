@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0c0c0c"/>
+
+  <!-- Subtle grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a1a1a" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.4"/>
+
+  <!-- Logo icon (scaled version of favicon) -->
+  <g transform="translate(100, 165) scale(0.75)">
+    <rect width="400" height="400" rx="80" ry="80" fill="#F5F2ED"/>
+    <circle cx="80" cy="134" r="20" fill="#3DBA8C"/>
+    <line x1="80" y1="190" x2="320" y2="190" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+    <line x1="80" y1="244" x2="248" y2="244" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+    <line x1="80" y1="298" x2="172" y2="298" stroke="#1A1A1A" stroke-width="24" stroke-linecap="round"/>
+  </g>
+
+  <!-- Text content -->
+  <text x="520" y="280" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="72" font-weight="700" fill="#d4d4d4">TaskPad</text>
+  <text x="520" y="340" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" fill="#888888">Your tasks, everywhere</text>
+
+  <!-- Feature pills -->
+  <g transform="translate(520, 380)">
+    <rect x="0" y="0" width="120" height="36" rx="18" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+    <text x="60" y="23" font-family="system-ui, sans-serif" font-size="14" fill="#d4d4d4" text-anchor="middle">Local-first</text>
+
+    <rect x="135" y="0" width="130" height="36" rx="18" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+    <text x="200" y="23" font-family="system-ui, sans-serif" font-size="14" fill="#d4d4d4" text-anchor="middle">Real-time sync</text>
+
+    <rect x="280" y="0" width="155" height="36" rx="18" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+    <text x="357" y="23" font-family="system-ui, sans-serif" font-size="14" fill="#d4d4d4" text-anchor="middle">Team collaboration</text>
+
+    <rect x="450" y="0" width="155" height="36" rx="18" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+    <text x="527" y="23" font-family="system-ui, sans-serif" font-size="14" fill="#d4d4d4" text-anchor="middle">Encrypted vault</text>
+  </g>
+
+  <!-- Accent line at bottom -->
+  <rect x="0" y="620" width="1200" height="10" fill="#F59E0B"/>
+</svg>
