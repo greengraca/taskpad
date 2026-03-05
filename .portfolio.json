@@ -10,7 +10,7 @@
     "Ships as PWA and native desktop app (Tauri) from one codebase"
   ],
   "titlePT": "TaskPad",
-  "subtitlePT": "As tuas tarefas, em todo o lado — PWA e desktop num só código",
+  "subtitlePT": "As tuas tarefas, em todo o lado",
   "descriptionPT": "Um gestor de tarefas feito para rapidez e colaboração em tempo real. Atualizações otimistas local-first mantêm a interface instantânea enquanto o Firestore sincroniza tudo em segundo plano. Disponível como PWA no Vercel e app nativa de desktop via Tauri, a partir de um único codebase React sem bibliotecas de estado.",
   "detailsPT": [
     "Colaboração em equipa em tempo real com projetos partilhados, avatares pixel-art e cofre de passwords encriptado",
@@ -19,7 +19,7 @@
     "Hooks personalizados de drag-and-drop para reordenar tarefas, tabs e atalhos",
     "Disponível como PWA e app nativa de desktop (Tauri) a partir de um só codebase"
   ],
-  "tech": ["React", "Vite", "Firebase", "Tauri", "CSS"],
+  "tech": ["React", "Vite", "Firebase", "Tauri"],
   "color": "#F59E0B",
   "accentDark": "#FBBF24",
   "icon": "📋",
