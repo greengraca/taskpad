@@ -358,8 +358,21 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .notes-preview .note-tag { color: #a78bfa; font-size: 12px; font-family: var(--fm); }
 .notes-preview mark { background: rgba(255, 208, 0, 0.25); color: inherit; padding: 1px 2px; border-radius: 2px; }
 .notes-preview del { color: #777; }
-.notes-preview li.task-list-item { list-style: none; margin-left: -20px; display: flex; align-items: baseline; }
-.notes-preview input[type="checkbox"] { cursor: pointer; margin-right: 6px; accent-color: #a78bfa; position: relative; top: 1px; flex-shrink: 0; }
+.notes-preview li.task-list-item { list-style: none; margin-left: -20px; display: flex; align-items: flex-start; gap: 0; }
+.notes-preview input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; cursor: pointer; margin: 0 8px 0 0; flex-shrink: 0;
+  width: 18px; height: 18px; border: 2px solid #555; border-radius: 4px; background: transparent;
+  position: relative; top: 1px; transition: all .15s ease;
+}
+.notes-preview input[type="checkbox"]:hover { border-color: #a78bfa; background: #a78bfa12; }
+.notes-preview input[type="checkbox"]:checked {
+  background: #a78bfa; border-color: #a78bfa;
+}
+.notes-preview input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 4px; top: 1px; width: 6px; height: 10px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.notes-preview li.task-list-item:has(input[type="checkbox"]:checked) > *:not(input) { color: #666; text-decoration: line-through; text-decoration-color: #555; }
 .notes-preview hr { border: none; border-top: 1px solid #252525; margin: 12px 0; }
 .notes-preview img { max-width: 100%; border-radius: 6px; }
 .notes-preview table { border-collapse: collapse; width: 100%; margin: 8px 0; }
