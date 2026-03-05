@@ -69,7 +69,10 @@ export const parseMarkdown = (content) => {
   const withCallouts = processCallouts(sanitized);
   // Make checkboxes interactive with data-checkbox index
   let cbIdx = 0;
-  return withCallouts.replace(/<input type="checkbox"( checked="")?( disabled="")?/g,
-    (_, checked) => `<input type="checkbox" data-checkbox="${cbIdx++}"${checked ? ' checked=""' : ''}`
+  return withCallouts.replace(/<input\s+(checked=""\s*)?disabled=""\s*(type="checkbox"|checked="")(\s*type="checkbox")?/g,
+    (match) => {
+      const isChecked = match.includes('checked=""');
+      return `<input type="checkbox" data-checkbox="${cbIdx++}"${isChecked ? ' checked=""' : ''}`;
+    }
   );
 };
