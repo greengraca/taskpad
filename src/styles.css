@@ -369,8 +369,8 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
   background: #a78bfa; border-color: #a78bfa;
 }
 .notes-preview input[type="checkbox"]:checked::after {
-  content: ''; position: absolute; left: 4px; top: 1px; width: 6px; height: 10px;
-  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+  content: ''; position: absolute; left: 50%; top: 45%; width: 5px; height: 8px;
+  border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: translate(-50%, -50%) rotate(45deg);
 }
 .notes-preview li.task-list-item:has(input[type="checkbox"]:checked) > *:not(input) { color: #666; text-decoration: line-through; text-decoration-color: #555; }
 .notes-preview hr { border: none; border-top: 1px solid #252525; margin: 12px 0; }
