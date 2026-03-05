@@ -1088,11 +1088,85 @@ export default function App() {
     };
     const onCtxMenu = (e) => e.preventDefault();
 
+    // Touch events for mobile
+    let lastTouchDist = 0;
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        // Pinch-to-zoom start
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+        isPanning = false; dragNode = null;
+        e.preventDefault(); return;
+      }
+      if (e.touches.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches[0];
+        mouseX = t.clientX - rect.left; mouseY = t.clientY - rect.top;
+        const n = getNodeAt(mouseX, mouseY);
+        if (n) {
+          dragNode = n; isDragging = false;
+        } else {
+          isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY;
+        }
+        e.preventDefault();
+      }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2) {
+        // Pinch-to-zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (lastTouchDist > 0) {
+          const rect = canvas.getBoundingClientRect();
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+          const zoomFactor = dist / lastTouchDist;
+          const newZoom = Math.max(0.2, Math.min(4, zoom * zoomFactor));
+          panX = midX - (midX - panX) * (newZoom / zoom);
+          panY = midY - (midY - panY) * (newZoom / zoom);
+          zoom = newZoom;
+        }
+        lastTouchDist = dist;
+        e.preventDefault(); return;
+      }
+      if (e.touches.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches[0];
+        mouseX = t.clientX - rect.left; mouseY = t.clientY - rect.top;
+        if (isPanning) {
+          panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY);
+        } else if (dragNode) {
+          isDragging = true;
+          const { x, y } = screenToWorld(mouseX, mouseY);
+          dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
+        }
+        e.preventDefault();
+      }
+    };
+    const onTouchEnd = (e) => {
+      lastTouchDist = 0;
+      if (e.touches.length > 0) return; // still has fingers down
+      if (isPanning) { isPanning = false; return; }
+      if (dragNode && !isDragging) {
+        const nId = dragNode.id;
+        dragNode = null;
+        handleNoteClick(nId);
+        setShowGraph(false);
+        return;
+      }
+      dragNode = null; isDragging = false;
+    };
+
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('contextmenu', onCtxMenu);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
 
     const getNeighbors = (nodeId) => {
       const s = new Set();
@@ -1217,6 +1291,9 @@ export default function App() {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('contextmenu', onCtxMenu);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
     };
   }, [showGraph, graphData, activeNote, handleNoteClick]);
 
@@ -1820,7 +1897,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.1</span>
+          <span className="tp-ver">v1.9.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -2261,8 +2338,8 @@ export default function App() {
             )}
           </div>
           {showGraph && (
-            <div className="tp-modal-backdrop" onMouseDown={() => setShowGraph(false)}>
-              <div className="graph-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="tp-modal-backdrop" onMouseDown={() => setShowGraph(false)} onTouchStart={() => setShowGraph(false)}>
+              <div className="graph-modal" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
                 <div className="graph-modal-hdr">
                   <span className="graph-modal-title">Graph View</span>
                   <span className="graph-modal-stats">{graphData.nodes.length} notes · {graphData.edges.length} connections</span>
