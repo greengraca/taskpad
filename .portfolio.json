@@ -1,6 +1,6 @@
 {
   "title": "TaskPad",
-  "subtitle": "Your tasks, everywhere — PWA and desktop in one codebase",
+  "subtitle": "Your tasks, everywhere",
   "description": "A task manager built for speed and real-time collaboration. Local-first optimistic updates keep the UI instant while Firestore syncs everything in the background. Ships as both a PWA on Vercel and a native desktop app via Tauri, from a single React codebase with zero state libraries.",
   "details": [
     "Real-time team collaboration with shared projects, pixel-art avatars and encrypted password vault",
