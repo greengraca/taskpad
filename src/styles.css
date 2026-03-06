@@ -358,18 +358,18 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .notes-preview .note-tag { color: #a78bfa; font-size: 12px; font-family: var(--fm); }
 .notes-preview mark { background: rgba(255, 208, 0, 0.25); color: inherit; padding: 1px 2px; border-radius: 2px; }
 .notes-preview del { color: #777; }
-.notes-preview li.task-list-item { list-style: none; margin-left: -20px; display: flex; align-items: flex-start; gap: 0; }
+.notes-preview li.task-list-item { list-style: none; margin-left: -20px; display: flex; align-items: center; gap: 0; }
 .notes-preview input[type="checkbox"] {
   -webkit-appearance: none; appearance: none; cursor: pointer; margin: 0 8px 0 0; flex-shrink: 0;
-  width: 18px; height: 18px; border: 2px solid #555; border-radius: 4px; background: transparent;
-  position: relative; top: 1px; transition: all .15s ease;
+  width: 14px; height: 14px; border: 1.5px solid #555; border-radius: 3px; background: transparent;
+  position: relative; transition: all .15s ease;
 }
 .notes-preview input[type="checkbox"]:hover { border-color: #a78bfa; background: #a78bfa12; }
 .notes-preview input[type="checkbox"]:checked {
   background: #a78bfa; border-color: #a78bfa;
 }
 .notes-preview input[type="checkbox"]:checked::after {
-  content: ''; position: absolute; left: 50%; top: 45%; width: 5px; height: 8px;
+  content: ''; position: absolute; left: 50%; top: 45%; width: 4px; height: 6.5px;
   border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: translate(-50%, -50%) rotate(45deg);
 }
 .notes-preview li.task-list-item:has(input[type="checkbox"]:checked) > *:not(input) { color: #666; text-decoration: line-through; text-decoration-color: #555; }
