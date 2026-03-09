@@ -179,6 +179,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .ins-zone { height: 10px; position: relative; z-index: 2; cursor: pointer; display: flex; align-items: center; padding: 0 12px; }
 .ins-line { position: absolute; left: 12px; right: 12px; height: 2px; border-radius: 1px; transition: opacity .15s; display: flex; align-items: center; justify-content: center; }
 .ins-plus { font-size: 11px; font-weight: 700; background: var(--bg); padding: 0 4px; border: 1px solid; border-radius: 3px; line-height: 1.2; font-family: var(--fm); }
+@media (max-width: 600px) {
+  .ins-zone-last { height: 28px; }
+  .ins-zone-last .ins-line { opacity: 0.35 !important; }
+}
 
 /* ─── Shortcuts bar ─── */
 .sc-bar { border-top: 1px solid var(--b); padding: 10px 16px; flex-shrink: 0; background: #0a0a0a; overflow: hidden; }

@@ -413,10 +413,10 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   );
 }
 
-function InsertZone({ onClick, color }) {
+function InsertZone({ onClick, color, last }) {
   const [hov, setHov] = useState(false);
   return (
-    <div className="ins-zone" onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
+    <div className={`ins-zone${last ? ' ins-zone-last' : ''}`} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
       <div className="ins-line" style={{ opacity: hov ? 1 : 0, background: color + '40' }}>
         <span className="ins-plus" style={{ color, borderColor: color + '55' }}>+</span>
       </div>
@@ -2593,7 +2593,7 @@ export default function App() {
                   onDragSelectStart={onDragSelectStart} onDragSelectEnter={onDragSelectEnter} dragSelectRef={dragSelectRef}
                   dragHandle={e => onTaskDrag(e, task.id)} style={getTaskStyle(task.id)}
                   refCb={el => { if (el) taskRefs.current[task.id] = el; else delete taskRefs.current[task.id]; }} />
-                {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} />}
+                {!isTaskDragging && <InsertZone onClick={() => insertTask(task.id)} color={accent} last={idx === sortedVisible.length - 1} />}
               </div>
             );
           })}
