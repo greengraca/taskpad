@@ -1451,7 +1451,7 @@ export default function App() {
   }, []);
 
   // ─── Tab touch long-press (iOS context menu) ───
-  const tabTouchRef = useRef({ timer: null, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
+  const tabTouchRef = useRef({ timer: null, holdTimer: null, holdReady: false, pid: null, startX: 0, startY: 0, moved: false, longPressed: false });
 
   // Project-Note linking (hooks must be before early return)
   const linkNoteToProject = useCallback((noteId, projectId) => {
@@ -1659,11 +1659,14 @@ export default function App() {
   const tabTouchStart = (e, pid) => {
     const t = e.touches[0];
     const ref = tabTouchRef.current;
-    ref.pid = pid; ref.startX = t.clientX; ref.startY = t.clientY; ref.moved = false; ref.longPressed = false;
-    clearTimeout(ref.timer);
+    ref.pid = pid; ref.startX = t.clientX; ref.startY = t.clientY; ref.moved = false; ref.longPressed = false; ref.holdReady = false;
+    clearTimeout(ref.timer); clearTimeout(ref.holdTimer);
+    // Hold-to-drag: after 250ms of holding, allow drag reorder
+    ref.holdTimer = setTimeout(() => { ref.holdTimer = null; ref.holdReady = true; }, 250);
     ref.timer = setTimeout(() => {
       ref.timer = null;
       ref.longPressed = true;
+      clearTimeout(ref.holdTimer); ref.holdTimer = null;
       // Long press → context menu
       setContextMenu({ x: ref.startX, y: ref.startY + 30, pid });
       setTeamErr('');
@@ -1671,18 +1674,28 @@ export default function App() {
   };
   const tabTouchMove = (e, pid) => {
     const ref = tabTouchRef.current;
-    if (!ref.timer) return;
     const t = e.touches[0];
     const dx = t.clientX - ref.startX, dy = t.clientY - ref.startY;
-    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-      clearTimeout(ref.timer); ref.timer = null; ref.moved = true;
-      // Start drag
+    // If finger moves before hold delay, user is scrolling — cancel all timers
+    if (!ref.holdReady && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      clearTimeout(ref.timer); ref.timer = null;
+      clearTimeout(ref.holdTimer); ref.holdTimer = null;
+      ref.moved = true;
+      return;
+    }
+    // After hold delay, start drag on significant horizontal movement
+    if (ref.holdReady && !ref.longPressed && Math.abs(dx) > 15) {
+      clearTimeout(ref.timer); ref.timer = null;
+      clearTimeout(ref.holdTimer); ref.holdTimer = null;
+      ref.moved = true;
       onTabDrag(e, pid, t.clientX);
     }
   };
   const tabTouchEnd = () => {
     clearTimeout(tabTouchRef.current.timer);
     tabTouchRef.current.timer = null;
+    clearTimeout(tabTouchRef.current.holdTimer);
+    tabTouchRef.current.holdTimer = null;
   };
 
   // ─── Team operations ───
@@ -1906,7 +1919,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.4</span>
+          <span className="tp-ver">v1.9.5</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
