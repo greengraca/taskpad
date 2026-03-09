@@ -2007,7 +2007,7 @@ export default function App() {
                 <span className="tp-td" style={{ background: pr.color }} />
                 {pr.name}
                 {pr.isTeam && <span className="team-badge">👥</span>}
-                {activeTab === pr.id && (() => {
+                {(() => {
                   const count = pr.isTeam
                     ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
                     : tasks.filter(t => t.projectId === pr.id && !t.done).length;
