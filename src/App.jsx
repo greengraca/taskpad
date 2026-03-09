@@ -283,6 +283,15 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       const el = e.target; const start = el.selectionStart ?? text.length; const end = el.selectionEnd ?? text.length;
+      // If current line is an empty bullet, remove it instead of adding another
+      const before = text.slice(0, start);
+      const emptyBullet = before.match(/\n- $/);
+      if (emptyBullet) {
+        const next = text.slice(0, start - 3) + text.slice(end);
+        setText(next);
+        requestAnimationFrame(() => { try { const pos = start - 3; el.selectionStart = el.selectionEnd = pos; } catch {} });
+        return true;
+      }
       const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
       setText(next);
       requestAnimationFrame(() => { try { const pos = start + bullet.length; el.selectionStart = el.selectionEnd = pos; } catch {} });
