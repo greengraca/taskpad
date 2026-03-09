@@ -181,7 +181,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .ins-plus { font-size: 11px; font-weight: 700; background: var(--bg); padding: 0 4px; border: 1px solid; border-radius: 3px; line-height: 1.2; font-family: var(--fm); }
 @media (max-width: 600px) {
   .ins-zone-last { height: 28px; }
-  .ins-zone-last .ins-line { opacity: 0.35 !important; }
+  .ins-zone-last .ins-line { opacity: 0.15 !important; }
   .tp-tasks:has(.task-input:focus) .ins-zone-last .ins-line { opacity: 0 !important; }
 }
 
