@@ -1999,11 +1999,19 @@ export default function App() {
                 <div className="settings-sub">
                   <div className="settings-thresholds">
                     <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow from</span>
-                    <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeYellow ?? 4}
-                      onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: v } })); }} />
+                    <div className="settings-stepper">
+                      <button className="settings-stepper-btn" onClick={() => up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: Math.max(1, (p.settings?.colorCodeYellow ?? 4) - 1) } }))}>−</button>
+                      <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeYellow ?? 4}
+                        onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: Math.max(1, v) } })); }} />
+                      <button className="settings-stepper-btn" onClick={() => up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: (p.settings?.colorCodeYellow ?? 4) + 1 } }))}>+</button>
+                    </div>
                     <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red from</span>
-                    <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeRed ?? 8}
-                      onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: v } })); }} />
+                    <div className="settings-stepper">
+                      <button className="settings-stepper-btn" onClick={() => up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: Math.max(1, (p.settings?.colorCodeRed ?? 8) - 1) } }))}>−</button>
+                      <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeRed ?? 8}
+                        onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: Math.max(1, v) } })); }} />
+                      <button className="settings-stepper-btn" onClick={() => up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: (p.settings?.colorCodeRed ?? 8) + 1 } }))}>+</button>
+                    </div>
                   </div>
                   <button className="settings-expand-btn" onClick={() => setSettingsExpand(!settingsExpand)}>
                     Per project overrides <span style={{ fontSize: '10px' }}>{settingsExpand ? '▲' : '▼'}</span>
@@ -2036,19 +2044,47 @@ export default function App() {
                         {hasOverride && enabled && (
                           <div className="settings-thresholds settings-thresholds-sm">
                             <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow</span>
-                            <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={yellow}
-                              onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                            <div className="settings-stepper settings-stepper-sm">
+                              <button className="settings-stepper-btn" onClick={() => up(p => {
                                 const perProj = { ...(p.settings?.colorCodePerProject || {}) };
-                                perProj[pr.id] = { ...(perProj[pr.id] || {}), yellow: v };
+                                const cur = perProj[pr.id]?.yellow ?? p.settings?.colorCodeYellow ?? 4;
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), yellow: Math.max(1, cur - 1) };
                                 return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
-                              }); }} />
+                              })}>−</button>
+                              <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={yellow}
+                                onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                                  const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                  perProj[pr.id] = { ...(perProj[pr.id] || {}), yellow: Math.max(1, v) };
+                                  return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                                }); }} />
+                              <button className="settings-stepper-btn" onClick={() => up(p => {
+                                const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                const cur = perProj[pr.id]?.yellow ?? p.settings?.colorCodeYellow ?? 4;
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), yellow: cur + 1 };
+                                return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                              })}>+</button>
+                            </div>
                             <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red</span>
-                            <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={red}
-                              onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                            <div className="settings-stepper settings-stepper-sm">
+                              <button className="settings-stepper-btn" onClick={() => up(p => {
                                 const perProj = { ...(p.settings?.colorCodePerProject || {}) };
-                                perProj[pr.id] = { ...(perProj[pr.id] || {}), red: v };
+                                const cur = perProj[pr.id]?.red ?? p.settings?.colorCodeRed ?? 8;
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), red: Math.max(1, cur - 1) };
                                 return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
-                              }); }} />
+                              })}>−</button>
+                              <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={red}
+                                onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                                  const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                  perProj[pr.id] = { ...(perProj[pr.id] || {}), red: Math.max(1, v) };
+                                  return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                                }); }} />
+                              <button className="settings-stepper-btn" onClick={() => up(p => {
+                                const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                const cur = perProj[pr.id]?.red ?? p.settings?.colorCodeRed ?? 8;
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), red: cur + 1 };
+                                return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                              })}>+</button>
+                            </div>
                           </div>
                         )}
                         {hasOverride && (
