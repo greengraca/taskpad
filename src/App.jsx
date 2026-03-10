@@ -35,6 +35,7 @@ const INBOX_ID = '__inbox__';
 const NOTES_ID = '__notes__';
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const EMPTY = [];
+const tcColor = n => n <= 3 ? null : n <= 7 ? '#f59e0b' : '#ef4444';
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const NOTE_TEMPLATES = [
@@ -2008,7 +2009,7 @@ export default function App() {
         <button className={`tp-t tp-t-special tp-t-cockpit ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cockpit
-          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && <span className="tp-tc">{inboxVisible.filter(t => !t.done).length}</span>}
+          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const cc = tcColor(c); return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
@@ -2033,7 +2034,8 @@ export default function App() {
                   const count = pr.isTeam
                     ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
                     : tasks.filter(t => t.projectId === pr.id && !t.done).length;
-                  return count > 0 ? <span className="tp-tc">{count}</span> : null;
+                  const cc = tcColor(count);
+                  return count > 0 ? <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{count}</span> : null;
                 })()}
               </button>
             )}
