@@ -56,9 +56,19 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .settings-toggle-sm { width: 30px; height: 17px; border-radius: 9px; }
 .settings-toggle-sm .settings-toggle-knob { width: 11px; height: 11px; }
 .settings-toggle-sm.on .settings-toggle-knob { transform: translateX(13px); }
+.settings-thresholds { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 0 2px; }
+.settings-thresholds-sm { margin: 2px 0 4px 8px; }
+.settings-thresh-label { font-family: var(--fm); font-size: 10px; font-weight: 500; }
+.settings-thresh-in { width: 42px; background: #111; border: 1px solid #333; color: #ccc; font-family: var(--fm); font-size: 11px; padding: 3px 6px; border-radius: 5px; text-align: center; }
+.settings-thresh-in-sm { width: 36px; font-size: 10px; padding: 2px 4px; }
+.settings-thresh-in:focus { outline: none; border-color: #38bdf8; }
 .settings-expand-btn { background: none; border: 1px solid #222; color: #777; font-family: var(--fm); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; width: 100%; text-align: left; margin-top: 4px; }
 .settings-expand-btn:hover { border-color: #333; color: #999; }
-.settings-projects { border-top: 1px solid #1a1a1a; margin-top: 6px; padding-top: 4px; max-height: 200px; overflow-y: auto; }
+.settings-projects { border-top: 1px solid #1a1a1a; margin-top: 6px; padding-top: 4px; max-height: 240px; overflow-y: auto; }
+.settings-proj-item { padding: 2px 0 4px; border-bottom: 1px solid #111; }
+.settings-proj-item:last-child { border-bottom: none; }
+.settings-reset-btn { background: none; border: none; color: #555; font-family: var(--fm); font-size: 9px; cursor: pointer; padding: 1px 8px; margin-top: 1px; }
+.settings-reset-btn:hover { color: #888; }
 
 /* ─── Invite bell ─── */
 .invite-bell { background: none; border: 1px solid #fbbf2444; color: #fbbf24; font-size: 12px; padding: 2px 8px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 4px; }

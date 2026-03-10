@@ -80,7 +80,7 @@ const DEFAULT_DATA = {
   scOrder: DEFAULT_SHORTCUTS.map(s => s.id),
   showSc: true,
   activeTab: INBOX_ID,
-  settings: { colorCodeTasks: true, colorCodePerProject: {} },
+  settings: { colorCodeTasks: true, colorCodeYellow: 4, colorCodeRed: 8, colorCodePerProject: {} },
 };
 
 // ─── Vertical drag reorder ───
@@ -668,7 +668,7 @@ export default function App() {
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
       const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
-      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID, settings: { colorCodeTasks: true, colorCodePerProject: {}, ...(base.settings || {}) } };
+      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID, settings: { colorCodeTasks: true, colorCodeYellow: 4, colorCodeRed: 8, colorCodePerProject: {}, ...(base.settings || {}) } };
       if (next.activeTab !== INBOX_ID && next.activeTab !== NOTES_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
@@ -1995,31 +1995,67 @@ export default function App() {
                   <span className="settings-toggle-knob" />
                 </button>
               </div>
-              <div className="settings-note">Badges turn yellow (4-7 tasks) or red (8+) based on count</div>
+              <div className="settings-thresholds">
+                <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow from</span>
+                <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeYellow ?? 4}
+                  onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: v } })); }} />
+                <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red from</span>
+                <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeRed ?? 8}
+                  onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: v } })); }} />
+              </div>
               <button className="settings-expand-btn" onClick={() => setSettingsExpand(!settingsExpand)}>
                 Per project overrides <span style={{ fontSize: '10px' }}>{settingsExpand ? '▲' : '▼'}</span>
               </button>
               {settingsExpand && (
                 <div className="settings-projects">
                   {projects.filter(p => !p.isTeam).map(pr => {
-                    const override = data.settings?.colorCodePerProject?.[pr.id];
-                    const effective = override ?? (data.settings?.colorCodeTasks !== false);
+                    const ov = data.settings?.colorCodePerProject?.[pr.id];
+                    const hasOverride = ov !== undefined;
+                    const enabled = hasOverride ? ov.enabled !== false : (data.settings?.colorCodeTasks !== false);
+                    const yellow = hasOverride && ov.yellow != null ? ov.yellow : (data.settings?.colorCodeYellow ?? 4);
+                    const red = hasOverride && ov.red != null ? ov.red : (data.settings?.colorCodeRed ?? 8);
                     return (
-                      <div key={pr.id} className="settings-row settings-row-sm">
-                        <span className="settings-label"><span className="tp-td" style={{ background: pr.color }} />{pr.name}</span>
-                        <button className={`settings-toggle settings-toggle-sm ${effective ? 'on' : ''}`}
-                          onClick={() => up(p => {
+                      <div key={pr.id} className="settings-proj-item">
+                        <div className="settings-row settings-row-sm">
+                          <span className="settings-label"><span className="tp-td" style={{ background: pr.color }} />{pr.name}</span>
+                          <button className={`settings-toggle settings-toggle-sm ${enabled ? 'on' : ''}`}
+                            onClick={() => up(p => {
+                              const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                              if (!hasOverride) {
+                                perProj[pr.id] = { enabled: !(p.settings?.colorCodeTasks !== false) };
+                              } else {
+                                perProj[pr.id] = { ...perProj[pr.id], enabled: !enabled };
+                              }
+                              return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                            })}>
+                            <span className="settings-toggle-knob" />
+                          </button>
+                        </div>
+                        {hasOverride && enabled && (
+                          <div className="settings-thresholds settings-thresholds-sm">
+                            <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow</span>
+                            <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={yellow}
+                              onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                                const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), yellow: v };
+                                return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                              }); }} />
+                            <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red</span>
+                            <input className="settings-thresh-in settings-thresh-in-sm" type="number" min="1" value={red}
+                              onChange={e => { const v = parseInt(e.target.value) || 1; up(p => {
+                                const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                                perProj[pr.id] = { ...(perProj[pr.id] || {}), red: v };
+                                return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                              }); }} />
+                          </div>
+                        )}
+                        {hasOverride && (
+                          <button className="settings-reset-btn" onClick={() => up(p => {
                             const perProj = { ...(p.settings?.colorCodePerProject || {}) };
-                            const globalVal = p.settings?.colorCodeTasks !== false;
-                            if (override === undefined) {
-                              perProj[pr.id] = !globalVal;
-                            } else {
-                              delete perProj[pr.id];
-                            }
+                            delete perProj[pr.id];
                             return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
-                          })}>
-                          <span className="settings-toggle-knob" />
-                        </button>
+                          })}>Reset to global</button>
+                        )}
                       </div>
                     );
                   })}
@@ -2068,7 +2104,7 @@ export default function App() {
         <button className={`tp-t tp-t-special tp-t-cockpit ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cockpit
-          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const shouldColor = data.settings?.colorCodeTasks !== false; const cc = shouldColor ? tcColor(c) : null; return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
+          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const s = data.settings; const shouldColor = s?.colorCodeTasks !== false; const y = s?.colorCodeYellow ?? 4; const r = s?.colorCodeRed ?? 8; const cc = shouldColor ? (c >= r ? '#ef4444' : c >= y ? '#f59e0b' : null) : null; return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
@@ -2093,8 +2129,11 @@ export default function App() {
                   const count = pr.isTeam
                     ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
                     : tasks.filter(t => t.projectId === pr.id && !t.done).length;
-                  const shouldColor = data.settings?.colorCodePerProject?.[pr.id] ?? data.settings?.colorCodeTasks !== false;
-                  const cc = shouldColor ? tcColor(count) : null;
+                  const s = data.settings; const ov = s?.colorCodePerProject?.[pr.id];
+                  const shouldColor = ov !== undefined ? ov.enabled !== false : s?.colorCodeTasks !== false;
+                  const y = (ov?.yellow != null ? ov.yellow : s?.colorCodeYellow) ?? 4;
+                  const r = (ov?.red != null ? ov.red : s?.colorCodeRed) ?? 8;
+                  const cc = shouldColor ? (count >= r ? '#ef4444' : count >= y ? '#f59e0b' : null) : null;
                   return count > 0 ? <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{count}</span> : null;
                 })()}
               </button>
