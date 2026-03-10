@@ -1995,18 +1995,20 @@ export default function App() {
                   <span className="settings-toggle-knob" />
                 </button>
               </div>
-              <div className="settings-thresholds">
-                <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow from</span>
-                <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeYellow ?? 4}
-                  onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: v } })); }} />
-                <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red from</span>
-                <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeRed ?? 8}
-                  onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: v } })); }} />
-              </div>
-              <button className="settings-expand-btn" onClick={() => setSettingsExpand(!settingsExpand)}>
-                Per project overrides <span style={{ fontSize: '10px' }}>{settingsExpand ? '▲' : '▼'}</span>
-              </button>
-              {settingsExpand && (
+              {data.settings?.colorCodeTasks !== false && (
+                <div className="settings-sub">
+                  <div className="settings-thresholds">
+                    <span className="settings-thresh-label" style={{ color: '#f59e0b' }}>Yellow from</span>
+                    <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeYellow ?? 4}
+                      onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeYellow: v } })); }} />
+                    <span className="settings-thresh-label" style={{ color: '#ef4444' }}>Red from</span>
+                    <input className="settings-thresh-in" type="number" min="1" value={data.settings?.colorCodeRed ?? 8}
+                      onChange={e => { const v = parseInt(e.target.value) || 1; up(p => ({ ...p, settings: { ...p.settings, colorCodeRed: v } })); }} />
+                  </div>
+                  <button className="settings-expand-btn" onClick={() => setSettingsExpand(!settingsExpand)}>
+                    Per project overrides <span style={{ fontSize: '10px' }}>{settingsExpand ? '▲' : '▼'}</span>
+                  </button>
+                  {settingsExpand && (
                 <div className="settings-projects">
                   {projects.filter(p => !p.isTeam).map(pr => {
                     const ov = data.settings?.colorCodePerProject?.[pr.id];
@@ -2059,6 +2061,8 @@ export default function App() {
                       </div>
                     );
                   })}
+                </div>
+              )}
                 </div>
               )}
             </div>
