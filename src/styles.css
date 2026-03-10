@@ -40,7 +40,25 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .local-badge { font-size: 10px; font-family: var(--fm); color: var(--tm); border: 1px solid var(--bl); padding: 1px 6px; border-radius: 4px; }
 .tp-sc-toggle { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; width: 32px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; }
 .tp-sc-toggle:hover { border-color: #333; color: #888; }
-.tp-sc-toggle:focus-visible, .invite-bell:focus-visible, .tp-t:focus-visible, .ctx-it:focus-visible { outline: 1px solid #38bdf8; outline-offset: 2px; }
+.tp-settings-btn { background: none; border: 1px solid var(--bl); color: var(--td); font-size: 16px; cursor: pointer; width: 32px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; }
+.tp-settings-btn:hover { border-color: #333; color: #888; }
+.tp-sc-toggle:focus-visible, .tp-settings-btn:focus-visible, .invite-bell:focus-visible, .tp-t:focus-visible, .ctx-it:focus-visible { outline: 1px solid #38bdf8; outline-offset: 2px; }
+
+/* ─── Settings ─── */
+.settings-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+.settings-row-sm { padding: 4px 0 4px 8px; }
+.settings-label { font-family: var(--fm); font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 7px; }
+.settings-note { font-family: var(--fm); font-size: 10px; color: #555; margin: -2px 0 8px; }
+.settings-toggle { width: 36px; height: 20px; border-radius: 10px; border: 1px solid #333; background: #1a1a1a; cursor: pointer; padding: 2px; display: flex; align-items: center; transition: background .2s, border-color .2s; flex-shrink: 0; }
+.settings-toggle.on { background: #38bdf833; border-color: #38bdf8; }
+.settings-toggle-knob { width: 14px; height: 14px; border-radius: 50%; background: #555; transition: transform .2s, background .2s; display: block; }
+.settings-toggle.on .settings-toggle-knob { transform: translateX(16px); background: #38bdf8; }
+.settings-toggle-sm { width: 30px; height: 17px; border-radius: 9px; }
+.settings-toggle-sm .settings-toggle-knob { width: 11px; height: 11px; }
+.settings-toggle-sm.on .settings-toggle-knob { transform: translateX(13px); }
+.settings-expand-btn { background: none; border: 1px solid #222; color: #777; font-family: var(--fm); font-size: 11px; padding: 5px 10px; border-radius: 6px; cursor: pointer; width: 100%; text-align: left; margin-top: 4px; }
+.settings-expand-btn:hover { border-color: #333; color: #999; }
+.settings-projects { border-top: 1px solid #1a1a1a; margin-top: 6px; padding-top: 4px; max-height: 200px; overflow-y: auto; }
 
 /* ─── Invite bell ─── */
 .invite-bell { background: none; border: 1px solid #fbbf2444; color: #fbbf24; font-size: 12px; padding: 2px 8px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 4px; }

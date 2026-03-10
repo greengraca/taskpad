@@ -80,6 +80,7 @@ const DEFAULT_DATA = {
   scOrder: DEFAULT_SHORTCUTS.map(s => s.id),
   showSc: true,
   activeTab: INBOX_ID,
+  settings: { colorCodeTasks: true, colorCodePerProject: {} },
 };
 
 // ─── Vertical drag reorder ───
@@ -506,6 +507,10 @@ export default function App() {
   const [avatarPickUid, setAvatarPickUid] = useState(null);
   const [teamProjDirect, setTeamProjDirect] = useState({});
 
+  // Settings state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsExpand, setSettingsExpand] = useState(false);
+
   // Vault state
   const [vaultOpen, setVaultOpen] = useState(false);
   const [vaultKey, setVaultKey] = useState(null);
@@ -663,7 +668,7 @@ export default function App() {
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
       const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
-      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID };
+      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID, settings: { colorCodeTasks: true, colorCodePerProject: {}, ...(base.settings || {}) } };
       if (next.activeTab !== INBOX_ID && next.activeTab !== NOTES_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
       return next;
     };
@@ -1920,7 +1925,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.5</span>
+          <span className="tp-ver">v1.9.6</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -1936,7 +1941,10 @@ export default function App() {
             </button>
           )}
         </div>
-        <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{data.showSc ? <><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="8" y1="1" x2="8" y2="15"/></> : <rect x="1" y="1" width="14" height="14" rx="2"/>}</svg></button>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button className="tp-settings-btn" onClick={() => setSettingsOpen(true)} title="Settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          <button className="tp-sc-toggle" onClick={() => up(p => ({ ...p, showSc: !p.showSc }))}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{data.showSc ? <><rect x="1" y="1" width="14" height="14" rx="2"/><line x1="8" y1="1" x2="8" y2="15"/></> : <rect x="1" y="1" width="14" height="14" rx="2"/>}</svg></button>
+        </div>
       </header>
 
       {/* Auth modal */}
@@ -1967,6 +1975,57 @@ export default function App() {
                 <div className="tp-modal-note">Once signed in, this device will sync with any other device using the same account.</div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Settings modal */}
+      {settingsOpen && (
+        <div className="tp-modal-backdrop" onMouseDown={() => { setSettingsOpen(false); setSettingsExpand(false); }}>
+          <div className="tp-modal" onMouseDown={e => e.stopPropagation()}>
+            <div className="tp-modal-h">
+              <div className="tp-modal-title">Settings</div>
+              <button className="tp-modal-x" onClick={() => { setSettingsOpen(false); setSettingsExpand(false); }}>×</button>
+            </div>
+            <div className="tp-modal-body">
+              <div className="settings-row">
+                <span className="settings-label">Color-coded task counts</span>
+                <button className={`settings-toggle ${data.settings?.colorCodeTasks !== false ? 'on' : ''}`}
+                  onClick={() => up(p => ({ ...p, settings: { ...p.settings, colorCodeTasks: p.settings?.colorCodeTasks === false ? true : false } }))}>
+                  <span className="settings-toggle-knob" />
+                </button>
+              </div>
+              <div className="settings-note">Badges turn yellow (4-7 tasks) or red (8+) based on count</div>
+              <button className="settings-expand-btn" onClick={() => setSettingsExpand(!settingsExpand)}>
+                Per project overrides <span style={{ fontSize: '10px' }}>{settingsExpand ? '▲' : '▼'}</span>
+              </button>
+              {settingsExpand && (
+                <div className="settings-projects">
+                  {projects.filter(p => !p.isTeam).map(pr => {
+                    const override = data.settings?.colorCodePerProject?.[pr.id];
+                    const effective = override ?? (data.settings?.colorCodeTasks !== false);
+                    return (
+                      <div key={pr.id} className="settings-row settings-row-sm">
+                        <span className="settings-label"><span className="tp-td" style={{ background: pr.color }} />{pr.name}</span>
+                        <button className={`settings-toggle settings-toggle-sm ${effective ? 'on' : ''}`}
+                          onClick={() => up(p => {
+                            const perProj = { ...(p.settings?.colorCodePerProject || {}) };
+                            const globalVal = p.settings?.colorCodeTasks !== false;
+                            if (override === undefined) {
+                              perProj[pr.id] = !globalVal;
+                            } else {
+                              delete perProj[pr.id];
+                            }
+                            return { ...p, settings: { ...p.settings, colorCodePerProject: perProj } };
+                          })}>
+                          <span className="settings-toggle-knob" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2009,7 +2068,7 @@ export default function App() {
         <button className={`tp-t tp-t-special tp-t-cockpit ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cockpit
-          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const cc = tcColor(c); return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
+          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const shouldColor = data.settings?.colorCodeTasks !== false; const cc = shouldColor ? tcColor(c) : null; return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
@@ -2034,7 +2093,8 @@ export default function App() {
                   const count = pr.isTeam
                     ? (teamTasksMap[pr.teamId] || []).filter(t => !t.done).length
                     : tasks.filter(t => t.projectId === pr.id && !t.done).length;
-                  const cc = tcColor(count);
+                  const shouldColor = data.settings?.colorCodePerProject?.[pr.id] ?? data.settings?.colorCodeTasks !== false;
+                  const cc = shouldColor ? tcColor(count) : null;
                   return count > 0 ? <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{count}</span> : null;
                 })()}
               </button>
