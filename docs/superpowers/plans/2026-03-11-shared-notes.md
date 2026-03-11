@@ -84,9 +84,14 @@ export const shareNoteWithTeam = async ({ noteId, teamId, permission, teamMember
 
   // Registry doc
   const regRef = doc(db, 'projects', teamId, 'sharedNotes', noteId);
+  // Read note title for denormalization into registry
+  const noteSnap = await getDoc(doc(db, 'users', userId, 'notes', noteId));
+  const noteTitle = noteSnap.exists() ? (noteSnap.data().title || 'Untitled') : 'Untitled';
+
   batch.set(regRef, {
     ownerUid: userId,
     permission,
+    title: noteTitle,
     sharedAt: serverTimestamp(),
   }, { merge: true });
 
@@ -95,11 +100,13 @@ export const shareNoteWithTeam = async ({ noteId, teamId, permission, teamMember
   const otherUids = teamMemberUids.filter(uid => uid !== userId);
   const update = {
     teamIds: arrayUnion(teamId),
-    sharedWithUids: arrayUnion(...otherUids),
     updatedAt: serverTimestamp(),
   };
-  if (permission === 'edit') {
-    update.editableByUids = arrayUnion(...otherUids);
+  if (otherUids.length > 0) {
+    update.sharedWithUids = arrayUnion(...otherUids);
+    if (permission === 'edit') {
+      update.editableByUids = arrayUnion(...otherUids);
+    }
   }
   batch.update(noteRef, update);
 
@@ -159,12 +166,12 @@ export const updateNoteSharePermission = async ({ noteId, teamId, permission, te
 
   // Update note's editableByUids
   const noteRef = doc(db, 'users', userId, 'notes', noteId);
-  if (permission === 'edit') {
+  if (permission === 'edit' && otherUids.length > 0) {
     batch.update(noteRef, {
       editableByUids: arrayUnion(...otherUids),
       updatedAt: serverTimestamp(),
     });
-  } else {
+  } else if (permission !== 'edit') {
     // Downgrade from edit to view: remove from editableByUids
     if (otherUids.length > 0) {
       batch.update(noteRef, {
@@ -272,26 +279,7 @@ export const deletePersonalNote = async ({ noteId }) => {
 };
 ```
 
-- [ ] **Step 5: Add shared notes listener tracking to `cleanTeamListeners`**
-
-At the top of sync.js (near line 61), add:
-
-```javascript
-let sharedNotesUnsubs = new Map();
-```
-
-In `cleanTeamListeners()` (line 64), add cleanup after the vault unsubs loop:
-
-```javascript
-for (const u of sharedNotesUnsubs.values()) {
-  try { u(); } catch (e) { console.warn('Unsub shared notes error:', e); }
-}
-sharedNotesUnsubs = new Map();
-```
-
-In `cleanup()` (line 175), the existing `cleanTeamListeners()` call covers this.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/sync.js
@@ -300,7 +288,89 @@ git commit -m "feat: add shared note subscriptions and cleanup"
 
 ---
 
-## Task 4: App State and Subscriptions
+## Task 4: Sync Layer — Team Membership Change Handling
+
+**Files:**
+- Modify: `src/sync.js`
+
+When a team member is added or removed, the denormalized `sharedWithUids` / `editableByUids` arrays on all notes shared with that team must be updated. Otherwise new members can't read shared notes, and removed members retain stale access.
+
+- [ ] **Step 1: Add `syncSharedNoteUids` function**
+
+This function recalculates the denormalized UID arrays for all notes shared with a given team. Called when team membership changes are detected.
+
+```javascript
+export const syncSharedNoteUids = async ({ teamId, currentMemberUids }) => {
+  if (!isFirebaseConfigured() || !userId) return;
+
+  // Get all shared notes for this team
+  const sharedSnap = await getDocs(query(collection(db, 'projects', teamId, 'sharedNotes')));
+  if (sharedSnap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const regDoc of sharedSnap.docs) {
+    const { ownerUid, permission } = regDoc.data();
+    const otherUids = currentMemberUids.filter(uid => uid !== ownerUid);
+    const noteRef = doc(db, 'users', ownerUid, 'notes', regDoc.id);
+
+    // We can only update notes we own (Firestore rules)
+    if (ownerUid !== userId) continue;
+
+    // Rebuild the arrays: set sharedWithUids to current team members (minus owner)
+    // Note: if the note is shared with multiple teams, we can't simply overwrite —
+    // we'd lose UIDs from other teams. Instead, we add new members and rely on
+    // unshare flow for removals.
+    if (otherUids.length > 0) {
+      const update = { sharedWithUids: arrayUnion(...otherUids), updatedAt: serverTimestamp() };
+      if (permission === 'edit') {
+        update.editableByUids = arrayUnion(...otherUids);
+      }
+      batch.update(noteRef, update);
+    }
+  }
+  await batch.commit();
+};
+```
+
+**Limitation:** This only adds new members. For removed members, their UIDs remain in the arrays until the note author explicitly unshares or the team project subscription detects the change and triggers cleanup. Since Firestore rules also check team membership via `isProjectMember`, removed members lose team project access entirely, which prevents them from discovering notes via the registry — so stale UIDs in the arrays are a low-severity issue (they could still read the note doc directly if they had the path, but cannot discover it).
+
+- [ ] **Step 2: Add `cleanRemovedMemberFromNotes` function**
+
+For thorough cleanup when a member is removed:
+
+```javascript
+export const cleanRemovedMemberFromNotes = async ({ teamId, removedUid }) => {
+  if (!isFirebaseConfigured() || !userId) return;
+
+  // Get all shared notes for this team that we own
+  const sharedSnap = await getDocs(query(collection(db, 'projects', teamId, 'sharedNotes')));
+  if (sharedSnap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const regDoc of sharedSnap.docs) {
+    const { ownerUid } = regDoc.data();
+    if (ownerUid !== userId) continue;
+    const noteRef = doc(db, 'users', ownerUid, 'notes', regDoc.id);
+    batch.update(noteRef, {
+      sharedWithUids: arrayRemove(removedUid),
+      editableByUids: arrayRemove(removedUid),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await batch.commit();
+};
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/sync.js
+git commit -m "feat: sync denormalized UIDs on team membership changes"
+```
+
+---
+
+## Task 5: App State and Subscriptions
 
 **Files:**
 - Modify: `src/App.jsx:537-553` (note state), `src/App.jsx:710-726` (team subscriptions)
@@ -355,7 +425,42 @@ useEffect(() => {
 }, [openSharedNote?.ownerUid, openSharedNote?.noteId]);
 ```
 
-- [ ] **Step 4: Add imports**
+- [ ] **Step 4: Detect team membership changes and sync UIDs**
+
+In the existing `subscribeTeamProject` effect (around line 729), add logic to detect membership changes and sync shared note UIDs:
+
+```javascript
+// Subscribe directly to the team project doc for nicknames/avatars + membership sync
+const prevMemberUidsRef = useRef({});
+useEffect(() => {
+  if (!isTeamTab || !teamId) return;
+  const unsub = subscribeTeamProject(teamId, (projData) => {
+    setTeamProjDirect(prev => ({ ...prev, [teamId]: projData }));
+
+    // Detect membership changes for shared notes
+    const prevUids = prevMemberUidsRef.current[teamId] || [];
+    const currUids = projData?.memberUids || [];
+    if (prevUids.length > 0 && prevUids.length !== currUids.length) {
+      // New members added — sync their UIDs to shared notes
+      const added = currUids.filter(uid => !prevUids.includes(uid));
+      if (added.length) {
+        syncSharedNoteUids({ teamId, currentMemberUids: currUids }).catch(() => {});
+      }
+      // Members removed — clean their UIDs from shared notes
+      const removed = prevUids.filter(uid => !currUids.includes(uid));
+      for (const uid of removed) {
+        cleanRemovedMemberFromNotes({ teamId, removedUid: uid }).catch(() => {});
+      }
+    }
+    prevMemberUidsRef.current[teamId] = currUids;
+  });
+  return unsub;
+}, [isTeamTab, teamId]);
+```
+
+Note: this replaces the existing `subscribeTeamProject` effect at line 729-735.
+
+- [ ] **Step 5: Add imports**
 
 At the top of App.jsx, add to the sync.js import:
 
@@ -368,10 +473,12 @@ import {
   subscribeSharedNotes,
   subscribeSharedNoteContent,
   updateSharedNote,
+  syncSharedNoteUids,
+  cleanRemovedMemberFromNotes,
 } from './sync';
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/App.jsx
@@ -380,7 +487,7 @@ git commit -m "feat: add shared notes state and subscriptions"
 
 ---
 
-## Task 5: Author UI — Team Projects in Project Picker
+## Task 6: Author UI — Team Projects in Project Picker
 
 **Files:**
 - Modify: `src/App.jsx:2774-2807` (project picker in note editor)
@@ -401,13 +508,19 @@ const linkedProjects = ids.map(id => {
 }).filter(Boolean);
 ```
 
-In the available projects dropdown (line 2798):
+Compute `linkedIds` from the new `linkedProjects` and build availability from all projects:
 ```javascript
+const linkedIds = new Set(linkedProjects.map(p => p.id));
 const allProjects = [
   ...projects.filter(p => !p.isTeam),
   ...projects.filter(p => p.isTeam && p.teamId).map(p => ({ ...p, id: p.teamId, isTeam: true })),
 ];
-return allProjects.filter(p => !linkedIds.has(p.id)).map(p => (
+const available = allProjects.filter(p => !linkedIds.has(p.id));
+```
+
+Show the "+ Project" button when `available.length > 0`, and render the picker:
+```javascript
+return available.map(p => (
   <button key={p.id} className="notes-proj-picker-item" onMouseDown={e => {
     e.preventDefault();
     linkNoteToProject(activeNote, p.id);
@@ -429,7 +542,7 @@ git commit -m "feat: include team projects in note project picker"
 
 ---
 
-## Task 6: Author UI — Sharing Control Per Team Project
+## Task 7: Author UI — Sharing Control Per Team Project
 
 **Files:**
 - Modify: `src/App.jsx` (note editor project badges area)
@@ -542,7 +655,7 @@ git commit -m "feat: add per-team sharing control on note project badges"
 
 ---
 
-## Task 7: Team Member View — Shared Notes Bar in Project Tab
+## Task 8: Team Member View — Shared Notes Bar in Project Tab
 
 **Files:**
 - Modify: `src/App.jsx:2939-2948` (project notes bar), `src/App.jsx:1869-1876` (projectNotes memo)
@@ -580,7 +693,7 @@ const projectNotes = useMemo(() => {
         _ownerUid: e.ownerUid,
         _permission: e.permission,
         _teamId: tid,
-        title: null, // Will be populated when content is fetched
+        title: e.title || null, // Denormalized from registry
       }));
 
     return [...ownNotes, ...otherShared];
@@ -626,7 +739,7 @@ Replace the project notes bar (line 2939):
 )}
 ```
 
-Note: shared note titles will show "…" until the user clicks and subscribes to the content. This avoids subscribing to every shared note's content at once. Alternatively, the registry entry could denormalize the title — but that adds sync complexity. We can enhance this later.
+Note titles are denormalized into the registry doc at share time for display in chips and list items.
 
 - [ ] **Step 3: Add CSS for shared note chips**
 
@@ -654,7 +767,7 @@ git commit -m "feat: show shared notes in team project notes bar"
 
 ---
 
-## Task 8: Shared Note Viewer/Editor in Notes Tab
+## Task 9: Shared Note Viewer/Editor in Notes Tab
 
 **Files:**
 - Modify: `src/App.jsx` (notes editor section, ~line 2690)
@@ -662,12 +775,18 @@ git commit -m "feat: show shared notes in team project notes bar"
 
 - [ ] **Step 1: Add shared note save handler**
 
+Near the existing note state hooks, add a separate ref:
+
+```javascript
+const sharedNoteSaveRef = useRef(null);
+```
+
 Near the existing `saveNote` function, add:
 
 ```javascript
 const saveSharedNote = useCallback((ownerUid, noteId, title, content) => {
-  if (noteSaveRef.current) clearTimeout(noteSaveRef.current);
-  noteSaveRef.current = setTimeout(() => {
+  if (sharedNoteSaveRef.current) clearTimeout(sharedNoteSaveRef.current);
+  sharedNoteSaveRef.current = setTimeout(() => {
     const { tags, links } = extractTagsAndLinks(content);
     updateSharedNote({ ownerUid, noteId, patch: { title, content, tags, links } })
       .catch(e => console.warn('Shared note save failed:', e));
@@ -690,15 +809,15 @@ In the notes container (line 2690), after `{!activeNote ? (` and before the note
           <button className="notes-back-btn" onClick={() => setOpenSharedNote(null)}>← Back</button>
           {sharedNoteContent && (
             <input className="notes-title-input"
-              value={openSharedNote.permission === 'edit' ? (sharedNoteContent.title || '') : undefined}
-              defaultValue={openSharedNote.permission !== 'edit' ? (sharedNoteContent.title || 'Untitled') : undefined}
+              value={sharedNoteContent.title || ''}
               readOnly={openSharedNote.permission !== 'edit'}
               placeholder="Note title"
-              onChange={openSharedNote.permission === 'edit' ? e => {
+              onChange={e => {
+                if (openSharedNote.permission !== 'edit') return;
                 const title = e.target.value;
                 setSharedNoteContent(prev => prev ? { ...prev, title } : prev);
                 saveSharedNote(openSharedNote.ownerUid, openSharedNote.noteId, title, sharedNoteContent.content);
-              } : undefined}
+              }}
             />
           )}
         </div>
@@ -783,6 +902,7 @@ At the bottom of the notes list (after `filteredNotes.map`, before the closing `
                   <span className="notes-item-title">
                     <span className="shared-note-author">{nick}</span>
                     {e.permission === 'view' ? '👁' : '✏️'}
+                    {' '}{e.title || 'Untitled'}
                   </span>
                 </div>
               </div>
@@ -843,14 +963,20 @@ git commit -m "feat: add shared note viewer/editor and shared notes section in l
 
 ---
 
-## Task 9: Wikilink Handling for Shared Notes
+## Task 10: Wikilink Handling for Shared Notes
 
 **Files:**
 - Modify: `src/App.jsx` (wikilink click handler in notes preview)
 
-- [ ] **Step 1: Find the wikilink click handler**
+- [ ] **Step 1: Add toast state and wikilink handler**
 
-Search for the existing wikilink click handler in App.jsx. It's the `onClick` on the notes preview div that handles `data-wikilink` attributes. Update it to handle shared note context:
+Add state for the private note toast:
+
+```javascript
+const [privateNoteToast, setPrivateNoteToast] = useState(false);
+```
+
+Then add the wikilink click handler for shared notes:
 
 ```javascript
 // In the shared note preview click handler
@@ -874,13 +1000,9 @@ const handleSharedNoteWikilinkClick = useCallback((e) => {
     // This is a known limitation — can be improved by denormalizing titles to registry
   }
 
-  // Show private note toast
-  // Use a simple temporary toast
-  const toast = document.createElement('div');
-  toast.className = 'notes-private-toast';
-  toast.textContent = 'This note is private';
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2000);
+  // Show private note toast via React state
+  setPrivateNoteToast(true);
+  setTimeout(() => setPrivateNoteToast(false), 2000);
 }, [openSharedNote, sharedNotesMap, notesList]);
 ```
 
@@ -895,7 +1017,17 @@ On both the view-only and edit-mode preview divs for shared notes, add:
 />
 ```
 
-- [ ] **Step 3: Add toast CSS**
+- [ ] **Step 3: Add toast rendering and CSS**
+
+Render the toast somewhere near the end of the `<main>` element in JSX:
+
+```jsx
+{privateNoteToast && (
+  <div className="notes-private-toast">This note is private</div>
+)}
+```
+
+Add CSS:
 
 ```css
 .notes-private-toast {
@@ -927,7 +1059,7 @@ git commit -m "feat: handle wikilinks in shared notes with privacy gating"
 
 ---
 
-## Task 10: Notes List — Show Team Project Badges
+## Task 11: Notes List — Show Team Project Badges
 
 **Files:**
 - Modify: `src/App.jsx:2736-2741` (note list item project badges)
@@ -963,7 +1095,7 @@ git commit -m "feat: show team project badges on notes in list view"
 
 ---
 
-## Task 11: Version Bump and Final Commit
+## Task 12: Version Bump and Final Commit
 
 **Files:**
 - Modify: `package.json`, `public/version.json`, `src-tauri/tauri.conf.json`, `src/App.jsx`
@@ -985,7 +1117,7 @@ git commit -m "1.11.0 - Shared notes for team projects"
 
 ---
 
-## Task 12: Manual Testing Checklist
+## Task 13: Manual Testing Checklist
 
 These are not automated tests — verify manually in the dev environment (`npm run dev`):
 
