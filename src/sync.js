@@ -548,7 +548,205 @@ export const removeNoteProject = async ({ noteId, projectId }) => {
 
 export const deletePersonalNote = async ({ noteId }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
-  await deleteDoc(doc(db, 'users', userId, 'notes', noteId));
+
+  // Read the note to get teamIds for cleanup
+  const noteRef = doc(db, 'users', userId, 'notes', noteId);
+  const noteSnap = await getDoc(noteRef);
+  const teamIds = noteSnap.exists() ? (noteSnap.data().teamIds || []) : [];
+
+  const batch = writeBatch(db);
+  batch.delete(noteRef);
+
+  // Delete all registry entries for this note
+  for (const tid of teamIds) {
+    batch.delete(doc(db, 'projects', tid, 'sharedNotes', noteId));
+  }
+
+  await batch.commit();
+};
+
+// ─── Shared Notes ─────────────────────────────────────────────────────────────
+
+export const shareNoteWithTeam = async ({ noteId, teamId, permission, teamMemberUids }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  const batch = writeBatch(db);
+
+  // Registry doc
+  const regRef = doc(db, 'projects', teamId, 'sharedNotes', noteId);
+  // Read note title for denormalization into registry
+  const noteSnap = await getDoc(doc(db, 'users', userId, 'notes', noteId));
+  const noteTitle = noteSnap.exists() ? (noteSnap.data().title || 'Untitled') : 'Untitled';
+
+  batch.set(regRef, {
+    ownerUid: userId,
+    permission,
+    title: noteTitle,
+    sharedAt: serverTimestamp(),
+  }, { merge: true });
+
+  // Denormalize UIDs onto note doc
+  const noteRef = doc(db, 'users', userId, 'notes', noteId);
+  const otherUids = teamMemberUids.filter(uid => uid !== userId);
+  const update = {
+    teamIds: arrayUnion(teamId),
+    updatedAt: serverTimestamp(),
+  };
+  if (otherUids.length > 0) {
+    update.sharedWithUids = arrayUnion(...otherUids);
+    if (permission === 'edit') {
+      update.editableByUids = arrayUnion(...otherUids);
+    }
+  }
+  batch.update(noteRef, update);
+
+  await batch.commit();
+};
+
+export const unshareNoteFromTeam = async ({ noteId, teamId, teamMemberUids }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  const batch = writeBatch(db);
+
+  // Delete registry doc
+  const regRef = doc(db, 'projects', teamId, 'sharedNotes', noteId);
+  batch.delete(regRef);
+
+  // Remove team member UIDs from note doc
+  const noteRef = doc(db, 'users', userId, 'notes', noteId);
+  const otherUids = teamMemberUids.filter(uid => uid !== userId);
+  if (otherUids.length > 0) {
+    batch.update(noteRef, {
+      teamIds: arrayRemove(teamId),
+      sharedWithUids: arrayRemove(...otherUids),
+      editableByUids: arrayRemove(...otherUids),
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    batch.update(noteRef, {
+      teamIds: arrayRemove(teamId),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+};
+
+export const updateNoteSharePermission = async ({ noteId, teamId, permission, teamMemberUids }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  const batch = writeBatch(db);
+  const otherUids = teamMemberUids.filter(uid => uid !== userId);
+
+  // Update registry permission
+  batch.update(doc(db, 'projects', teamId, 'sharedNotes', noteId), {
+    permission,
+    sharedAt: serverTimestamp(),
+  });
+
+  // Update note's editableByUids
+  const noteRef = doc(db, 'users', userId, 'notes', noteId);
+  if (permission === 'edit' && otherUids.length > 0) {
+    batch.update(noteRef, {
+      editableByUids: arrayUnion(...otherUids),
+      updatedAt: serverTimestamp(),
+    });
+  } else if (permission !== 'edit') {
+    if (otherUids.length > 0) {
+      batch.update(noteRef, {
+        editableByUids: arrayRemove(...otherUids),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
+};
+
+export const subscribeSharedNotes = (teamId, cb) => {
+  if (!isFirebaseConfigured() || !userId) {
+    cb([]);
+    return () => {};
+  }
+  const q = query(collection(db, 'projects', teamId, 'sharedNotes'));
+  const unsub = onSnapshot(q, (snap) => {
+    const entries = snap.docs.map(d => ({ noteId: d.id, ...d.data() }));
+    cb(entries);
+  }, (e) => {
+    console.warn('Shared notes listener error:', e);
+    cb([]);
+  });
+  return unsub;
+};
+
+export const subscribeSharedNoteContent = (ownerUid, noteId, cb) => {
+  if (!isFirebaseConfigured() || !userId) {
+    cb(null);
+    return () => {};
+  }
+  const noteRef = doc(db, 'users', ownerUid, 'notes', noteId);
+  const unsub = onSnapshot(noteRef, (snap) => {
+    if (snap.exists()) {
+      cb({ id: snap.id, ...snap.data() });
+    } else {
+      cb(null);
+    }
+  }, (e) => {
+    console.warn('Shared note content listener error:', e);
+    cb(null);
+  });
+  return unsub;
+};
+
+export const updateSharedNote = async ({ ownerUid, noteId, patch }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'users', ownerUid, 'notes', noteId), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const syncSharedNoteUids = async ({ teamId, currentMemberUids }) => {
+  if (!isFirebaseConfigured() || !userId) return;
+
+  const sharedSnap = await getDocs(query(collection(db, 'projects', teamId, 'sharedNotes')));
+  if (sharedSnap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const regDoc of sharedSnap.docs) {
+    const { ownerUid, permission } = regDoc.data();
+    const otherUids = currentMemberUids.filter(uid => uid !== ownerUid);
+    const noteRef = doc(db, 'users', ownerUid, 'notes', regDoc.id);
+
+    // We can only update notes we own (Firestore rules)
+    if (ownerUid !== userId) continue;
+
+    if (otherUids.length > 0) {
+      const update = { sharedWithUids: arrayUnion(...otherUids), updatedAt: serverTimestamp() };
+      if (permission === 'edit') {
+        update.editableByUids = arrayUnion(...otherUids);
+      }
+      batch.update(noteRef, update);
+    }
+  }
+  await batch.commit();
+};
+
+export const cleanRemovedMemberFromNotes = async ({ teamId, removedUid }) => {
+  if (!isFirebaseConfigured() || !userId) return;
+
+  const sharedSnap = await getDocs(query(collection(db, 'projects', teamId, 'sharedNotes')));
+  if (sharedSnap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const regDoc of sharedSnap.docs) {
+    const { ownerUid } = regDoc.data();
+    if (ownerUid !== userId) continue;
+    const noteRef = doc(db, 'users', ownerUid, 'notes', regDoc.id);
+    batch.update(noteRef, {
+      sharedWithUids: arrayRemove(removedUid),
+      editableByUids: arrayRemove(removedUid),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await batch.commit();
 };
 
 export const resetVault = async ({ teamId }) => {

@@ -20,7 +20,14 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
 
       match /notes/{noteId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid in resource.data.sharedWithUids
+        );
+        allow write: if isSignedIn() && (
+          request.auth.uid == userId ||
+          request.auth.uid in resource.data.editableByUids
+        );
       }
     }
 
@@ -54,6 +61,14 @@ service cloud.firestore {
       match /vault/{entryId} {
         allow read: if isProjectMember(projectId);
         allow create, update, delete: if isProjectMember(projectId);
+      }
+
+      match /sharedNotes/{noteId} {
+        allow read: if isProjectMember(projectId);
+        allow create: if isProjectMember(projectId)
+          && request.auth.uid == request.resource.data.ownerUid;
+        allow update, delete: if isProjectMember(projectId)
+          && request.auth.uid == resource.data.ownerUid;
       }
     }
 

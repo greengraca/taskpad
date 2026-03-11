@@ -5,7 +5,10 @@ import { initSync, saveToCloud, saveLocal, cleanup, getAuthUser,
   reconnectFirestore,
   initVault, subscribeVaultEntries, createVaultEntry, updateVaultEntry, deleteVaultEntry, resetVault,
   subscribePersonalNotes, createPersonalNote, updatePersonalNote, deletePersonalNote,
-  addNoteProject, removeNoteProject
+  addNoteProject, removeNoteProject,
+  shareNoteWithTeam, unshareNoteFromTeam, updateNoteSharePermission,
+  subscribeSharedNotes, subscribeSharedNoteContent, updateSharedNote,
+  syncSharedNoteUids, cleanRemovedMemberFromNotes
 } from './sync';
 import { parseMarkdown, extractLinks, extractTags } from './markdown';
 import { generateSalt, toBase64, fromBase64, deriveKey, encryptEntry, decryptEntry, createVerifier, checkVerifier } from './crypto';
@@ -551,6 +554,13 @@ export default function App() {
   const projPickerRef = useRef(null);
   const graphCanvasRef = useRef(null);
 
+  // Shared notes state
+  const [sharedNotesMap, setSharedNotesMap] = useState({}); // { [teamId]: registryEntry[] }
+  const [openSharedNote, setOpenSharedNote] = useState(null); // { ownerUid, noteId, teamId, permission } | null
+  const [sharedNoteContent, setSharedNoteContent] = useState(null); // { id, title, content, tags, links, ... } | null
+  const sharedNoteSaveRef = useRef(null);
+  const [privateNoteToast, setPrivateNoteToast] = useState(false);
+
   const projects = data?.projects || EMPTY;
   // Precompile project detection regexes (only recomputed when projects change)
   const projectPatterns = useMemo(() => projects.filter(p => !p.isTeam).map(p => ({
@@ -725,11 +735,56 @@ export default function App() {
     return () => unsubs.forEach(u => u());
   }, [teamIdsKey, synced]);
 
-  // Subscribe directly to the team project doc for nicknames/avatars
+  // Subscribe to shared notes for ALL team projects
+  useEffect(() => {
+    if (teamIdsList.length === 0 || !synced) return;
+    const unsubs = teamIdsList.map(tid =>
+      subscribeSharedNotes(tid, (entries) => {
+        setSharedNotesMap(prev => ({ ...prev, [tid]: entries }));
+      })
+    );
+    return () => unsubs.forEach(u => u());
+  }, [teamIdsKey, synced]);
+
+  // Subscribe to shared note content when viewing one
+  useEffect(() => {
+    if (!openSharedNote) {
+      setSharedNoteContent(null);
+      return;
+    }
+    const { ownerUid, noteId } = openSharedNote;
+    const unsub = subscribeSharedNoteContent(ownerUid, noteId, (data) => {
+      if (!data) {
+        setOpenSharedNote(null);
+        setSharedNoteContent(null);
+        return;
+      }
+      setSharedNoteContent(data);
+    });
+    return unsub;
+  }, [openSharedNote?.ownerUid, openSharedNote?.noteId]);
+
+  // Subscribe directly to the team project doc for nicknames/avatars + membership sync
+  const prevMemberUidsRef = useRef({});
   useEffect(() => {
     if (!isTeamTab || !teamId) return;
     const unsub = subscribeTeamProject(teamId, (projData) => {
       setTeamProjDirect(prev => ({ ...prev, [teamId]: projData }));
+
+      // Detect membership changes for shared notes
+      const prevUids = prevMemberUidsRef.current[teamId] || [];
+      const currUids = projData?.memberUids || [];
+      if (prevUids.length > 0 && prevUids.length !== currUids.length) {
+        const added = currUids.filter(uid => !prevUids.includes(uid));
+        if (added.length) {
+          syncSharedNoteUids({ teamId, currentMemberUids: currUids }).catch(() => {});
+        }
+        const removed = prevUids.filter(uid => !currUids.includes(uid));
+        for (const uid of removed) {
+          cleanRemovedMemberFromNotes({ teamId, removedUid: uid }).catch(() => {});
+        }
+      }
+      prevMemberUidsRef.current[teamId] = currUids;
     });
     return unsub;
   }, [isTeamTab, teamId]);
@@ -1866,14 +1921,95 @@ export default function App() {
   const unlinkNoteFromProject = useCallback((noteId, projectId) => {
     removeNoteProject({ noteId, projectId }).catch(e => console.warn('Unlink note failed:', e));
   }, []);
+
+  // Shared notes helpers
+  const getNoteShareState = useCallback((noteId, teamId) => {
+    const entries = sharedNotesMap[teamId] || [];
+    const entry = entries.find(e => e.noteId === noteId && e.ownerUid === syncStatus?.user?.uid);
+    if (!entry) return 'private';
+    return entry.permission; // 'view' or 'edit'
+  }, [sharedNotesMap, syncStatus?.user?.uid]);
+
+  const cycleNoteShareState = useCallback(async (noteId, teamId) => {
+    const currentState = getNoteShareState(noteId, teamId);
+    const teamProj = projects.find(p => p.isTeam && p.teamId === teamId);
+    const teamProjData = teamProjDirect[teamId];
+    const memberUids = teamProjData?.memberUids || teamProj?.memberUids || [];
+    try {
+      if (currentState === 'private') {
+        await shareNoteWithTeam({ noteId, teamId, permission: 'view', teamMemberUids: memberUids });
+      } else if (currentState === 'view') {
+        await updateNoteSharePermission({ noteId, teamId, permission: 'edit', teamMemberUids: memberUids });
+      } else {
+        await unshareNoteFromTeam({ noteId, teamId, teamMemberUids: memberUids });
+      }
+    } catch (e) {
+      console.warn('Share toggle failed:', e);
+    }
+  }, [getNoteShareState, projects, teamProjDirect]);
+
+  const saveSharedNote = useCallback((ownerUid, noteId, title, content) => {
+    if (sharedNoteSaveRef.current) clearTimeout(sharedNoteSaveRef.current);
+    sharedNoteSaveRef.current = setTimeout(() => {
+      const tags = extractTags(content);
+      const links = extractLinks(content);
+      updateSharedNote({ ownerUid, noteId, patch: { title, content, tags, links } })
+        .catch(e => console.warn('Shared note save failed:', e));
+    }, 800);
+  }, []);
+
+  const handleSharedNoteWikilinkClick = useCallback((e) => {
+    const wl = e.target.closest('[data-wikilink]');
+    if (!wl) return;
+    const linkTitle = wl.getAttribute('data-wikilink');
+    if (openSharedNote) {
+      const ownNote = notesList.find(n => n.title === linkTitle);
+      if (ownNote) {
+        setOpenSharedNote(null);
+        setActiveNote(ownNote.id);
+        return;
+      }
+    }
+    setPrivateNoteToast(true);
+    setTimeout(() => setPrivateNoteToast(false), 2000);
+  }, [openSharedNote, notesList]);
+
   const projectNotes = useMemo(() => {
-    if (!data || !notesList.length) return EMPTY;
-    const at = data?.activeTab;
-    if (!at || at === INBOX_ID || at === NOTES_ID) return EMPTY;
-    const proj = (data?.projects || []).find(p => p.id === at);
-    if (proj?.isTeam) return EMPTY;
-    return notesList.filter(n => (n.projectIds || []).includes(at) || n.projectId === at);
-  }, [notesList, data]);
+    if (!data || !activeTab || activeTab === INBOX_ID || activeTab === NOTES_ID) return EMPTY;
+
+    const proj = (data?.projects || []).find(p => p.id === activeTab);
+
+    // Personal project: show own linked notes (existing behavior)
+    if (proj && !proj.isTeam) {
+      return notesList.filter(n => (n.projectIds || []).includes(activeTab) || n.projectId === activeTab)
+        .map(n => ({ ...n, _isOwn: true }));
+    }
+
+    // Team project: show own linked notes + shared notes from others
+    if (proj?.isTeam && proj.teamId) {
+      const tid = proj.teamId;
+      const ownNotes = notesList
+        .filter(n => (n.projectIds || []).includes(tid))
+        .map(n => ({ ...n, _isOwn: true }));
+
+      const sharedEntries = sharedNotesMap[tid] || [];
+      const myUid = syncStatus?.user?.uid;
+      const otherShared = sharedEntries
+        .filter(e => e.ownerUid !== myUid)
+        .map(e => ({
+          id: e.noteId,
+          _isOwn: false,
+          _ownerUid: e.ownerUid,
+          _permission: e.permission,
+          _teamId: tid,
+          title: e.title || null,
+        }));
+
+      return [...ownNotes, ...otherShared];
+    }
+
+    return EMPTY;
+  }, [notesList, data, activeTab, sharedNotesMap, syncStatus?.user?.uid]);
 
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
@@ -2325,7 +2461,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.10</span>
+          <span className="tp-ver">v1.11.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -2690,7 +2826,64 @@ export default function App() {
         {isNotes ? (
           <>
           <div className="notes-container">
-            {!activeNote ? (
+            {openSharedNote ? (
+              /* ─── Shared Note View ─── */
+              <div className="notes-editor-view">
+                <div className="notes-editor-toolbar">
+                  <button className="notes-back-btn" onClick={() => setOpenSharedNote(null)}>← Back</button>
+                  {sharedNoteContent && (
+                    <input className="notes-title-input"
+                      value={sharedNoteContent.title || ''}
+                      readOnly={openSharedNote.permission !== 'edit'}
+                      placeholder="Note title"
+                      onChange={e => {
+                        if (openSharedNote.permission !== 'edit') return;
+                        const title = e.target.value;
+                        setSharedNoteContent(prev => prev ? { ...prev, title } : prev);
+                        saveSharedNote(openSharedNote.ownerUid, openSharedNote.noteId, title, sharedNoteContent.content);
+                      }}
+                    />
+                  )}
+                </div>
+                {(() => {
+                  const teamProj = teamProjDirect[openSharedNote.teamId];
+                  const nick = teamProj?.nicknames?.[openSharedNote.ownerUid] || 'teammate';
+                  const avId = teamProj?.avatars?.[openSharedNote.ownerUid];
+                  return (
+                    <div className="shared-note-banner">
+                      {avId !== undefined && avId !== null && AVATARS[avId] && (
+                        <img src={AVATARS[avId].src} alt="" className="shared-note-avatar" />
+                      )}
+                      <span>Shared by <b>{nick}</b> — {openSharedNote.permission === 'edit' ? 'you can edit' : 'view only'}</span>
+                    </div>
+                  );
+                })()}
+                {!sharedNoteContent ? (
+                  <div className="notes-empty"><span>Loading...</span></div>
+                ) : openSharedNote.permission === 'edit' ? (
+                  <>
+                    <div className="notes-view-tabs">
+                      <button className={`notes-view-tab ${noteView === 'edit' ? 'on' : ''}`} onClick={() => setNoteView('edit')}>Edit</button>
+                      <button className={`notes-view-tab ${noteView === 'preview' ? 'on' : ''}`} onClick={() => setNoteView('preview')}>Preview</button>
+                    </div>
+                    {noteView === 'edit' ? (
+                      <textarea className="notes-textarea"
+                        value={sharedNoteContent.content}
+                        onChange={e => {
+                          const content = e.target.value;
+                          setSharedNoteContent(prev => prev ? { ...prev, content } : prev);
+                          saveSharedNote(openSharedNote.ownerUid, openSharedNote.noteId, sharedNoteContent.title, content);
+                        }}
+                      />
+                    ) : (
+                      <div className="notes-preview" onClick={handleSharedNoteWikilinkClick} dangerouslySetInnerHTML={{ __html: parseMarkdown(sharedNoteContent.content || '') }} />
+                    )}
+                  </>
+                ) : (
+                  <div className="notes-preview" onClick={handleSharedNoteWikilinkClick} dangerouslySetInnerHTML={{ __html: parseMarkdown(sharedNoteContent.content || '') }} />
+                )}
+              </div>
+            ) : !activeNote ? (
               /* ─── Notes List View ─── */
               <div className="notes-list-view">
                 <div className="notes-toolbar">
@@ -2735,9 +2928,17 @@ export default function App() {
                     </div>
                     {(() => {
                       const ids = note.projectIds?.length ? note.projectIds : (note.projectId ? [note.projectId] : []);
-                      const linked = ids.map(id => projects.find(p => p.id === id && !p.isTeam)).filter(Boolean);
+                      const linked = ids.map(id => {
+                        const personal = projects.find(p => p.id === id && !p.isTeam);
+                        if (personal) return personal;
+                        const team = projects.find(p => p.isTeam && p.teamId === id);
+                        if (team) return { ...team, id: team.teamId, isTeam: true };
+                        return null;
+                      }).filter(Boolean);
                       return linked.length ? linked.map(lp => (
-                        <span key={lp.id} className="notes-item-proj" style={{ color: lp.color, borderColor: lp.color + '44' }}>{lp.name}</span>
+                        <span key={lp.id} className="notes-item-proj" style={{ color: lp.color, borderColor: lp.color + '44' }}>
+                          {lp.isTeam && '👥 '}{lp.name}
+                        </span>
                       )) : null;
                     })()}
                     <span className="notes-item-date">
@@ -2745,6 +2946,50 @@ export default function App() {
                     </span>
                   </div>
                 ))}
+                {/* Shared notes from team members */}
+                {(() => {
+                  const myUid = syncStatus?.user?.uid;
+                  const teamProjects = projects.filter(p => p.isTeam && p.teamId);
+                  const sharedSections = teamProjects
+                    .map(tp => {
+                      const entries = (sharedNotesMap[tp.teamId] || []).filter(e => e.ownerUid !== myUid);
+                      if (!entries.length) return null;
+                      return { project: tp, entries };
+                    })
+                    .filter(Boolean);
+
+                  if (!sharedSections.length) return null;
+
+                  return sharedSections.map(({ project: tp, entries }) => {
+                    const teamProj = teamProjDirect[tp.teamId];
+                    return (
+                      <div key={tp.teamId} className="shared-notes-section">
+                        <div className="shared-notes-header" style={{ color: tp.color }}>
+                          👥 Shared with {tp.name}
+                        </div>
+                        {entries.map(e => {
+                          const nick = teamProj?.nicknames?.[e.ownerUid] || 'teammate';
+                          return (
+                            <div key={e.noteId} className="notes-item shared-note-item" onClick={() => {
+                              setOpenSharedNote({ ownerUid: e.ownerUid, noteId: e.noteId, teamId: tp.teamId, permission: e.permission });
+                              setActiveNote(null);
+                            }}>
+                              <div className="notes-item-left">
+                                <div className="notes-item-info">
+                                  <span className="notes-item-title">
+                                    <span className="shared-note-author">{nick}</span>
+                                    {e.permission === 'view' ? '👁' : '✏️'}
+                                    {' '}{e.title || 'Untitled'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : (
               /* ─── Note Editor View ─── */
@@ -2774,15 +3019,49 @@ export default function App() {
                   <div className="notes-proj-link" ref={projPickerRef}>
                     {(() => {
                       const ids = activeNoteData?.projectIds?.length ? activeNoteData.projectIds : (activeNoteData?.projectId ? [activeNoteData.projectId] : []);
-                      const linkedProjects = ids.map(id => projects.find(p => p.id === id && !p.isTeam)).filter(Boolean);
+                      const linkedProjects = ids.map(id => {
+                        const personal = projects.find(p => p.id === id && !p.isTeam);
+                        if (personal) return personal;
+                        const teamProj = projects.find(p => p.isTeam && p.teamId === id);
+                        if (teamProj) return { ...teamProj, id: teamProj.teamId, isTeam: true };
+                        return null;
+                      }).filter(Boolean);
                       const linkedIds = new Set(linkedProjects.map(p => p.id));
-                      const available = projects.filter(p => !p.isTeam && !linkedIds.has(p.id));
+                      const allProjects = [
+                        ...projects.filter(p => !p.isTeam),
+                        ...projects.filter(p => p.isTeam && p.teamId).map(p => ({ ...p, id: p.teamId, isTeam: true })),
+                      ];
+                      const available = allProjects.filter(p => !linkedIds.has(p.id));
                       return <>
                         {linkedProjects.map(lp => (
                           <span key={lp.id} className="notes-proj-badge" style={{ borderColor: lp.color + '44', color: lp.color }}>
                             <span className="notes-proj-dot" style={{ background: lp.color }} />
+                            {lp.isTeam && <span className="notes-proj-team-icon">👥</span>}
                             {lp.name}
-                            <button className="notes-proj-unlink" onClick={() => unlinkNoteFromProject(activeNote, lp.id)}>×</button>
+                            {lp.isTeam && (() => {
+                              const shareState = getNoteShareState(activeNote, lp.id);
+                              return (
+                                <button
+                                  className={`notes-share-toggle notes-share-${shareState}`}
+                                  onClick={(e) => { e.stopPropagation(); cycleNoteShareState(activeNote, lp.id); }}
+                                  title={shareState === 'private' ? 'Private — click to share (view)' : shareState === 'view' ? 'Shared (view) — click for edit' : 'Shared (edit) — click to unshare'}
+                                >
+                                  {shareState === 'private' ? '🔒' : shareState === 'view' ? '👁' : '✏️'}
+                                </button>
+                              );
+                            })()}
+                            <button className="notes-proj-unlink" onClick={() => {
+                              if (lp.isTeam) {
+                                const shareState = getNoteShareState(activeNote, lp.id);
+                                if (shareState !== 'private') {
+                                  const tp = projects.find(p => p.isTeam && p.teamId === lp.id);
+                                  const tpd = teamProjDirect[lp.id];
+                                  const memberUids = tpd?.memberUids || tp?.memberUids || [];
+                                  unshareNoteFromTeam({ noteId: activeNote, teamId: lp.id, teamMemberUids: memberUids }).catch(() => {});
+                                }
+                              }
+                              unlinkNoteFromProject(activeNote, lp.id);
+                            }}>×</button>
                           </span>
                         ))}
                         {available.length > 0 && (
@@ -2795,9 +3074,14 @@ export default function App() {
                         {(() => {
                           const ids = activeNoteData?.projectIds?.length ? activeNoteData.projectIds : (activeNoteData?.projectId ? [activeNoteData.projectId] : []);
                           const linkedIds = new Set(ids);
-                          return projects.filter(p => !p.isTeam && !linkedIds.has(p.id)).map(p => (
+                          const allProjects = [
+                            ...projects.filter(p => !p.isTeam && !linkedIds.has(p.id)),
+                            ...projects.filter(p => p.isTeam && p.teamId && !linkedIds.has(p.teamId)).map(p => ({ ...p, id: p.teamId, isTeam: true })),
+                          ];
+                          return allProjects.map(p => (
                             <button key={p.id} className="notes-proj-picker-item" onMouseDown={e => { e.preventDefault(); linkNoteToProject(activeNote, p.id); setProjPicker(false); }}>
                               <span className="notes-proj-dot" style={{ background: p.color }} />
+                              {p.isTeam && <span className="notes-proj-team-icon">👥</span>}
                               {p.name}
                             </button>
                           ));
@@ -2926,6 +3210,9 @@ export default function App() {
               </div>
             </div>
           )}
+          {privateNoteToast && (
+            <div className="notes-private-toast">This note is private</div>
+          )}
           </>
         ) : (
         <>
@@ -2939,11 +3226,29 @@ export default function App() {
         {projectNotes.length > 0 && (
           <div className="proj-notes-bar">
             <span className="proj-notes-label">📝 Notes</span>
-            {projectNotes.map(n => (
-              <button key={n.id} className="proj-notes-chip" onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); handleNoteClick(n.id); }}>
-                {n.title || 'Untitled'}
-              </button>
-            ))}
+            {projectNotes.map(n => {
+              if (n._isOwn) {
+                return (
+                  <button key={n.id} className="proj-notes-chip" onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); handleNoteClick(n.id); }}>
+                    {n.title || 'Untitled'}
+                  </button>
+                );
+              }
+              const teamProj = teamProjDirect[n._teamId];
+              const nick = teamProj?.nicknames?.[n._ownerUid] || 'teammate';
+              return (
+                <button key={`shared-${n.id}`} className="proj-notes-chip proj-notes-shared"
+                  onClick={() => {
+                    up(p => ({ ...p, activeTab: NOTES_ID }));
+                    setOpenSharedNote({ ownerUid: n._ownerUid, noteId: n.id, teamId: n._teamId, permission: n._permission });
+                    setActiveNote(null);
+                  }}>
+                  <span className="proj-notes-chip-author">{nick}</span>
+                  <span className="proj-notes-chip-perm">{n._permission === 'view' ? '👁' : '✏️'}</span>
+                  {n.title || '…'}
+                </button>
+              );
+            })}
           </div>
         )}
         {selectedIds.size > 0 && (
