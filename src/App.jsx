@@ -4,7 +4,8 @@ import { initSync, saveToCloud, saveLocal, cleanup, getAuthUser,
   subscribeTeamTasks, subscribeTeamProject, createTeamTask, genTeamTaskId, updateTeamTask, deleteTeamTask, reorderTeamTasks, updateTeamProject, deleteTeamProject,
   reconnectFirestore,
   initVault, subscribeVaultEntries, createVaultEntry, updateVaultEntry, deleteVaultEntry, resetVault,
-  subscribePersonalNotes, createPersonalNote, updatePersonalNote, deletePersonalNote
+  subscribePersonalNotes, createPersonalNote, updatePersonalNote, deletePersonalNote,
+  addNoteProject, removeNoteProject
 } from './sync';
 import { parseMarkdown, extractLinks, extractTags } from './markdown';
 import { generateSalt, toBase64, fromBase64, deriveKey, encryptEntry, decryptEntry, createVerifier, checkVerifier } from './crypto';
@@ -1461,10 +1462,10 @@ export default function App() {
 
   // Project-Note linking (hooks must be before early return)
   const linkNoteToProject = useCallback((noteId, projectId) => {
-    updatePersonalNote({ noteId, patch: { projectId } }).catch(e => console.warn('Link note failed:', e));
+    addNoteProject({ noteId, projectId }).catch(e => console.warn('Link note failed:', e));
   }, []);
-  const unlinkNoteFromProject = useCallback((noteId) => {
-    updatePersonalNote({ noteId, patch: { projectId: null } }).catch(e => console.warn('Unlink note failed:', e));
+  const unlinkNoteFromProject = useCallback((noteId, projectId) => {
+    removeNoteProject({ noteId, projectId }).catch(e => console.warn('Unlink note failed:', e));
   }, []);
   const projectNotes = useMemo(() => {
     if (!data || !notesList.length) return EMPTY;
@@ -1472,7 +1473,7 @@ export default function App() {
     if (!at || at === INBOX_ID || at === NOTES_ID) return EMPTY;
     const proj = (data?.projects || []).find(p => p.id === at);
     if (proj?.isTeam) return EMPTY;
-    return notesList.filter(n => n.projectId === at);
+    return notesList.filter(n => (n.projectIds || []).includes(at) || n.projectId === at);
   }, [notesList, data]);
 
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
@@ -1925,7 +1926,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.6</span>
+          <span className="tp-ver">v1.9.7</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -2333,8 +2334,12 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                    {(() => { const lp = note.projectId ? projects.find(p => p.id === note.projectId && !p.isTeam) : null;
-                      return lp ? <span className="notes-item-proj" style={{ color: lp.color, borderColor: lp.color + '44' }}>{lp.name}</span> : null;
+                    {(() => {
+                      const ids = note.projectIds?.length ? note.projectIds : (note.projectId ? [note.projectId] : []);
+                      const linked = ids.map(id => projects.find(p => p.id === id && !p.isTeam)).filter(Boolean);
+                      return linked.length ? linked.map(lp => (
+                        <span key={lp.id} className="notes-item-proj" style={{ color: lp.color, borderColor: lp.color + '44' }}>{lp.name}</span>
+                      )) : null;
                     })()}
                     <span className="notes-item-date">
                       {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
@@ -2369,25 +2374,35 @@ export default function App() {
                   <button className={`notes-view-tab ${noteView === 'preview' ? 'on' : ''}`} onClick={() => setNoteView('preview')}>Preview</button>
                   <div className="notes-proj-link" ref={projPickerRef}>
                     {(() => {
-                      const linked = activeNoteData?.projectId ? projects.find(p => p.id === activeNoteData.projectId && !p.isTeam) : null;
-                      return linked ? (
-                        <span className="notes-proj-badge" style={{ borderColor: linked.color + '44', color: linked.color }}>
-                          <span className="notes-proj-dot" style={{ background: linked.color }} />
-                          {linked.name}
-                          <button className="notes-proj-unlink" onClick={() => unlinkNoteFromProject(activeNote)}>×</button>
-                        </span>
-                      ) : (
-                        <button className="notes-proj-link-btn" onClick={() => setProjPicker(v => !v)}>+ Project</button>
-                      );
+                      const ids = activeNoteData?.projectIds?.length ? activeNoteData.projectIds : (activeNoteData?.projectId ? [activeNoteData.projectId] : []);
+                      const linkedProjects = ids.map(id => projects.find(p => p.id === id && !p.isTeam)).filter(Boolean);
+                      const linkedIds = new Set(linkedProjects.map(p => p.id));
+                      const available = projects.filter(p => !p.isTeam && !linkedIds.has(p.id));
+                      return <>
+                        {linkedProjects.map(lp => (
+                          <span key={lp.id} className="notes-proj-badge" style={{ borderColor: lp.color + '44', color: lp.color }}>
+                            <span className="notes-proj-dot" style={{ background: lp.color }} />
+                            {lp.name}
+                            <button className="notes-proj-unlink" onClick={() => unlinkNoteFromProject(activeNote, lp.id)}>×</button>
+                          </span>
+                        ))}
+                        {available.length > 0 && (
+                          <button className="notes-proj-link-btn" onClick={() => setProjPicker(v => !v)}>+ Project</button>
+                        )}
+                      </>;
                     })()}
                     {projPicker && (
                       <div className="notes-proj-picker">
-                        {projects.filter(p => !p.isTeam).map(p => (
-                          <button key={p.id} className="notes-proj-picker-item" onMouseDown={e => { e.preventDefault(); linkNoteToProject(activeNote, p.id); setProjPicker(false); }}>
-                            <span className="notes-proj-dot" style={{ background: p.color }} />
-                            {p.name}
-                          </button>
-                        ))}
+                        {(() => {
+                          const ids = activeNoteData?.projectIds?.length ? activeNoteData.projectIds : (activeNoteData?.projectId ? [activeNoteData.projectId] : []);
+                          const linkedIds = new Set(ids);
+                          return projects.filter(p => !p.isTeam && !linkedIds.has(p.id)).map(p => (
+                            <button key={p.id} className="notes-proj-picker-item" onMouseDown={e => { e.preventDefault(); linkNoteToProject(activeNote, p.id); setProjPicker(false); }}>
+                              <span className="notes-proj-dot" style={{ background: p.color }} />
+                              {p.name}
+                            </button>
+                          ));
+                        })()}
                       </div>
                     )}
                   </div>

@@ -13,6 +13,7 @@ import {
   deleteDoc,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
   orderBy,
   writeBatch,
   enableNetwork,
@@ -525,6 +526,22 @@ export const updatePersonalNote = async ({ noteId, patch }) => {
   if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
   await updateDoc(doc(db, 'users', userId, 'notes', noteId), {
     ...patch,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const addNoteProject = async ({ noteId, projectId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'users', userId, 'notes', noteId), {
+    projectIds: arrayUnion(projectId),
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const removeNoteProject = async ({ noteId, projectId }) => {
+  if (!isFirebaseConfigured() || !userId) throw new Error('Sign in');
+  await updateDoc(doc(db, 'users', userId, 'notes', noteId), {
+    projectIds: arrayRemove(projectId),
     updatedAt: serverTimestamp(),
   });
 };
