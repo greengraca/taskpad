@@ -968,14 +968,11 @@ export default function App() {
     const taskCounts = {};
     tasks.forEach(t => {
       if (!t.projectId || t.projectId === INBOX_ID) return;
-      if (!taskCounts[t.projectId]) taskCounts[t.projectId] = { total: 0, done: 0 };
-      taskCounts[t.projectId].total++;
-      if (t.done) taskCounts[t.projectId].done++;
+      taskCounts[t.projectId] = (taskCounts[t.projectId] || 0) + 1;
     });
     const projNodes = [...linkedProjectIds].map(pid => {
       const proj = personalProjects.find(p => p.id === pid);
-      const tc = taskCounts[pid] || { total: 0, done: 0 };
-      return { id: 'proj_' + pid, title: proj.name, linkCount: inCount['proj_' + pid] || 0, isProject: true, color: proj.color, taskTotal: tc.total, taskDone: tc.done };
+      return { id: 'proj_' + pid, title: proj.name, linkCount: inCount['proj_' + pid] || 0, isProject: true, color: proj.color, taskTotal: taskCounts[pid] || 0 };
     });
     const nodes = [
       ...notesList.map(n => ({ id: n.id, title: n.title || 'Untitled', linkCount: inCount[n.id] || 0 })),
@@ -1054,6 +1051,16 @@ export default function App() {
     const W = () => canvas.width / dpr;
     const H = () => canvas.height / dpr;
 
+    // Build adjacency for cluster grouping (notes sharing a project attract)
+    const nodeProjectMap = new Map(); // noteId -> Set<projId>
+    gEdges.forEach(e => {
+      if (!e.isProjectEdge) return;
+      const noteId = e.source.startsWith('proj_') ? e.target : e.source;
+      const projId = e.source.startsWith('proj_') ? e.source : e.target;
+      if (!nodeProjectMap.has(noteId)) nodeProjectMap.set(noteId, new Set());
+      nodeProjectMap.get(noteId).add(projId);
+    });
+
     const simNodes = gNodes.map((n) => ({
       ...n,
       x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
@@ -1064,9 +1071,27 @@ export default function App() {
     }));
     const nodeMap = new Map(simNodes.map(n => [n.id, n]));
 
+    // Pre-compute edge max length for opacity scaling
+    const idealLen = Math.sqrt((W() * H()) / Math.max(gNodes.length, 1)) * 0.8;
+
+    // Alpha cooling
+    let alpha = 1.0;
+    const alphaDecay = 0.015;
+    const alphaMin = 0.002;
+    let settled = false;
+
+    // Adaptive repulsion based on node count
+    const repK = Math.max(2000, (W() * H()) / Math.max(gNodes.length, 1) * 0.3);
+    const springK = 0.05;
+    const springLen = Math.max(80, idealLen * 0.9);
+    const centerK = 0.008;
+    const collisionPad = 12;
+    const clusterK = 0.008;
+
     let zoom = 1, panX = 0, panY = 0;
     let hoveredId = null, dragNode = null, isDragging = false;
     let mouseX = 0, mouseY = 0;
+    let needsRedraw = true;
 
     const screenToWorld = (sx, sy) => ({ x: (sx - panX) / zoom, y: (sy - panY) / zoom });
     const worldToScreen = (wx, wy) => ({ x: wx * zoom + panX, y: wy * zoom + panY });
@@ -1077,13 +1102,13 @@ export default function App() {
         const n = simNodes[i];
         const dx = n.x - x, dy = n.y - y;
         const hitR = Math.max(n.radius + 8, 18);
-        // Circle hitbox for the node itself
         if (dx * dx + dy * dy < hitR * hitR) return n;
-        // Rectangular hitbox for the label below (extends ~22px below node center)
         if (Math.abs(dx) < hitR + 20 && dy > 0 && dy < n.radius + 24) return n;
       }
       return null;
     };
+
+    const wake = () => { if (settled) { settled = false; alpha = Math.max(alpha, 0.1); } needsRedraw = true; };
 
     const onWheel = (e) => {
       e.preventDefault();
@@ -1094,6 +1119,7 @@ export default function App() {
       panX = mx - (mx - panX) * (newZoom / zoom);
       panY = my - (my - panY) * (newZoom / zoom);
       zoom = newZoom;
+      needsRedraw = true;
     };
 
     let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
@@ -1106,21 +1132,24 @@ export default function App() {
       }
       if (e.button === 0) {
         const n = getNodeAt(mouseX, mouseY);
-        if (n) { dragNode = n; isDragging = false; e.preventDefault(); }
+        if (n) { dragNode = n; isDragging = false; wake(); e.preventDefault(); }
       }
     };
     const onMouseMove = (e) => {
       const rect = canvas.getBoundingClientRect();
       mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
-      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); return; }
+      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); needsRedraw = true; return; }
       if (dragNode) {
         isDragging = true;
         const { x, y } = screenToWorld(mouseX, mouseY);
         dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
+        needsRedraw = true;
         return;
       }
+      const prev = hoveredId;
       hoveredId = getNodeAt(mouseX, mouseY)?.id || null;
       canvas.style.cursor = hoveredId ? 'pointer' : 'grab';
+      if (hoveredId !== prev) needsRedraw = true;
     };
     const onMouseUp = () => {
       if (isPanning) { isPanning = false; return; }
@@ -1144,7 +1173,6 @@ export default function App() {
     let lastTouchDist = 0;
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
-        // Pinch-to-zoom start
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         lastTouchDist = Math.sqrt(dx * dx + dy * dy);
@@ -1157,7 +1185,7 @@ export default function App() {
         mouseX = t.clientX - rect.left; mouseY = t.clientY - rect.top;
         const n = getNodeAt(mouseX, mouseY);
         if (n) {
-          dragNode = n; isDragging = false;
+          dragNode = n; isDragging = false; wake();
         } else {
           isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY;
         }
@@ -1166,7 +1194,6 @@ export default function App() {
     };
     const onTouchMove = (e) => {
       if (e.touches.length === 2) {
-        // Pinch-to-zoom
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1181,6 +1208,7 @@ export default function App() {
           zoom = newZoom;
         }
         lastTouchDist = dist;
+        needsRedraw = true;
         e.preventDefault(); return;
       }
       if (e.touches.length === 1) {
@@ -1189,17 +1217,19 @@ export default function App() {
         mouseX = t.clientX - rect.left; mouseY = t.clientY - rect.top;
         if (isPanning) {
           panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY);
+          needsRedraw = true;
         } else if (dragNode) {
           isDragging = true;
           const { x, y } = screenToWorld(mouseX, mouseY);
           dragNode.x = x; dragNode.y = y; dragNode.vx = 0; dragNode.vy = 0;
+          needsRedraw = true;
         }
         e.preventDefault();
       }
     };
     const onTouchEnd = (e) => {
       lastTouchDist = 0;
-      if (e.touches.length > 0) return; // still has fingers down
+      if (e.touches.length > 0) return;
       if (isPanning) { isPanning = false; return; }
       if (dragNode && !isDragging) {
         const node = dragNode;
@@ -1231,46 +1261,98 @@ export default function App() {
       return s;
     };
 
+    // Pre-count stats (avoid per-frame filter)
+    const noteCount = gNodes.filter(n => !n.isProject).length;
+    const projCount = gNodes.filter(n => n.isProject).length;
+
     let animId;
-    const draw = () => {
-      animId = requestAnimationFrame(draw);
+    const tick = () => {
+      animId = requestAnimationFrame(tick);
       const w = W(), h = H();
+      const cx = w / 2, cy = h / 2;
 
-      for (let i = 0; i < simNodes.length; i++) {
-        const a = simNodes[i];
-        if (a === dragNode) continue;
-        const cx = w / 2, cy = h / 2;
-        a.vx += (cx - a.x) * 0.01;
-        a.vy += (cy - a.y) * 0.01;
-        for (let j = i + 1; j < simNodes.length; j++) {
-          const b = simNodes[j];
-          let dx = a.x - b.x, dy = a.y - b.y;
-          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const minDist = a.radius + b.radius + 2;
-          if (dist < minDist) dist = minDist;
-          const force = 3000 / (dist * dist);
-          const fx = dx / dist * force, fy = dy / dist * force;
-          a.vx += fx; a.vy += fy;
-          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+      // ── Physics step ──
+      if (!settled) {
+        // Centering gravity
+        for (let i = 0; i < simNodes.length; i++) {
+          const a = simNodes[i];
+          if (a === dragNode) continue;
+          a.vx += (cx - a.x) * centerK * alpha;
+          a.vy += (cy - a.y) * centerK * alpha;
         }
+
+        // Repulsion (all pairs)
+        for (let i = 0; i < simNodes.length; i++) {
+          const a = simNodes[i];
+          for (let j = i + 1; j < simNodes.length; j++) {
+            const b = simNodes[j];
+            let dx = a.x - b.x, dy = a.y - b.y;
+            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Collision: enforce minimum distance
+            const minDist = a.radius + b.radius + collisionPad;
+            if (dist < minDist) dist = minDist;
+            const force = repK * alpha / (dist * dist);
+            const fx = dx / dist * force, fy = dy / dist * force;
+            if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+            if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+          }
+        }
+
+        // Spring attraction (edges)
+        gEdges.forEach(e => {
+          const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+          if (!a || !b) return;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = (dist - springLen) * springK * alpha;
+          const fx = dx / dist * force, fy = dy / dist * force;
+          if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+        });
+
+        // Cluster grouping: notes sharing a project attract weakly
+        const noteNodes = simNodes.filter(n => !n.isProject && nodeProjectMap.has(n.id));
+        for (let i = 0; i < noteNodes.length; i++) {
+          for (let j = i + 1; j < noteNodes.length; j++) {
+            const a = noteNodes[i], b = noteNodes[j];
+            const aProj = nodeProjectMap.get(a.id), bProj = nodeProjectMap.get(b.id);
+            let shared = false;
+            for (const p of aProj) { if (bProj.has(p)) { shared = true; break; } }
+            if (!shared) continue;
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const force = dist * clusterK * alpha;
+            const fx = dx / dist * force, fy = dy / dist * force;
+            if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+            if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+          }
+        }
+
+        // Velocity damping & integration
+        let totalV = 0;
+        simNodes.forEach(n => {
+          if (n === dragNode) return;
+          n.vx *= 0.85; n.vy *= 0.85;
+          n.x += n.vx; n.y += n.vy;
+          totalV += Math.abs(n.vx) + Math.abs(n.vy);
+        });
+
+        // Alpha decay
+        alpha *= (1 - alphaDecay);
+        if (alpha < alphaMin && totalV < 0.5) settled = true;
+        needsRedraw = true;
       }
-      gEdges.forEach(e => {
-        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
-        if (!a || !b) return;
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = (dist - 100) * 0.04;
-        const fx = dx / dist * force, fy = dy / dist * force;
-        if (a !== dragNode) { a.vx += fx; a.vy += fy; }
-        if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
-      });
+
+      // Fade-in opacity (always runs)
+      let anyFading = false;
       simNodes.forEach(n => {
-        if (n === dragNode) return;
-        n.vx *= 0.88; n.vy *= 0.88;
-        n.x += n.vx; n.y += n.vy;
-        if (n.opacity < 1) n.opacity = Math.min(1, n.opacity + 0.05);
+        if (n.opacity < 1) { n.opacity = Math.min(1, n.opacity + 0.04); anyFading = true; needsRedraw = true; }
       });
 
+      if (!needsRedraw) return;
+      needsRedraw = !settled || anyFading;
+
+      // ── Render ──
       ctx.clearRect(0, 0, w, h);
       const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
       grad.addColorStop(0, '#0a0a0a');
@@ -1279,49 +1361,76 @@ export default function App() {
       ctx.fillRect(0, 0, w, h);
 
       const neighbors = hoveredId ? getNeighbors(hoveredId) : new Set();
+      const maxEdgeLen = springLen * 3;
 
+      // ── Batched edges: note-to-note (curved) ──
+      ctx.lineWidth = 1;
       gEdges.forEach(e => {
+        if (e.isProjectEdge) return;
         const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
         if (!a || !b) return;
         const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
-        const isHighlight = hoveredId && (e.source === hoveredId || e.target === hoveredId);
-        if (e.isProjectEdge) {
-          const projNode = a.isProject ? a : b;
-          ctx.beginPath();
-          ctx.setLineDash([4, 4]);
-          ctx.moveTo(sa.x, sa.y);
-          ctx.lineTo(sb.x, sb.y);
-          ctx.strokeStyle = isHighlight ? (projNode.color || '#a78bfa') + '66' : (projNode.color || '#555') + '33';
-          ctx.lineWidth = isHighlight ? 1.5 : 1;
-          ctx.stroke();
-          ctx.setLineDash([]);
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(sa.x, sa.y);
-          ctx.lineTo(sb.x, sb.y);
-          ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
-          ctx.lineWidth = isHighlight ? 1.5 : 1;
-          ctx.stroke();
-        }
+        const isHL = hoveredId && (e.source === hoveredId || e.target === hoveredId);
+        // Edge opacity by length
+        const edgeDist = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+        const lenAlpha = isHL ? 0.35 : Math.max(0.08, 0.3 * (1 - edgeDist / maxEdgeLen));
+        ctx.globalAlpha = lenAlpha;
+        ctx.strokeStyle = isHL ? '#a78bfa' : '#888';
+        ctx.lineWidth = isHL ? 1.5 : 0.8;
+        // Curved edge: slight bezier offset
+        const mx = (sa.x + sb.x) / 2, my = (sa.y + sb.y) / 2;
+        const dx = sb.x - sa.x, dy = sb.y - sa.y;
+        const off = Math.min(15, Math.sqrt(dx * dx + dy * dy) * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(sa.x, sa.y);
+        ctx.quadraticCurveTo(mx + -dy / Math.sqrt(dx * dx + dy * dy + 1) * off, my + dx / Math.sqrt(dx * dx + dy * dy + 1) * off, sb.x, sb.y);
+        ctx.stroke();
       });
+      ctx.globalAlpha = 1;
+
+      // ── Batched edges: project (dashed) ──
+      gEdges.forEach(e => {
+        if (!e.isProjectEdge) return;
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
+        const isHL = hoveredId && (e.source === hoveredId || e.target === hoveredId);
+        const projNode = a.isProject ? a : b;
+        const pc = projNode.color || '#888';
+        const edgeDist = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+        const lenAlpha = isHL ? 0.45 : Math.max(0.12, 0.35 * (1 - edgeDist / maxEdgeLen));
+        ctx.globalAlpha = lenAlpha;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = pc;
+        ctx.lineWidth = isHL ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.moveTo(sa.x, sa.y);
+        ctx.lineTo(sb.x, sb.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+
+      // ── Batched nodes ──
+      // Collect label info for culling pass
+      const labels = [];
 
       simNodes.forEach(n => {
         const { x: sx, y: sy } = worldToScreen(n.x, n.y);
         const r = n.radius * zoom;
-        if (sx + r < 0 || sx - r > w || sy + r < 0 || sy - r > h) return;
+        if (sx + r < -20 || sx - r > w + 20 || sy + r < -20 || sy - r > h + 20) return;
 
         const isActive = !n.isProject && activeNote === n.id;
         const isHovered = hoveredId === n.id;
         const isNeighbor = hoveredId && neighbors.has(n.id);
-        const isDim = hoveredId && !isHovered && !isNeighbor && hoveredId !== n.id;
+        const isDim = hoveredId && !isHovered && !isNeighbor;
 
-        ctx.globalAlpha = n.opacity * (isDim ? 0.3 : 1);
+        ctx.globalAlpha = n.opacity * (isDim ? 0.25 : 1);
 
         if (n.isProject) {
-          // Draw project as rounded rectangle
           const pc = n.color || '#888';
-          const s = r * 1.6; // side length
-          const cr = 3 * zoom; // corner radius
+          const s = r * 1.6;
+          const cr = 3 * zoom;
           const x0 = sx - s / 2, y0 = sy - s / 2;
 
           if (isHovered) { ctx.shadowBlur = 10; ctx.shadowColor = pc + '66'; }
@@ -1342,48 +1451,19 @@ export default function App() {
           ctx.strokeStyle = isHovered ? pc : pc + '88';
           ctx.lineWidth = 1.5;
           ctx.stroke();
-
           ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
-          // Task progress arc inside the square
-          if (n.taskTotal > 0) {
-            const pct = n.taskDone / n.taskTotal;
-            const arcR = r * 0.55;
-            // Background arc
-            ctx.beginPath();
-            ctx.arc(sx, sy, arcR, 0, Math.PI * 2);
-            ctx.strokeStyle = pc + '33';
-            ctx.lineWidth = 2 * zoom;
-            ctx.stroke();
-            // Progress arc
-            if (pct > 0) {
-              ctx.beginPath();
-              ctx.arc(sx, sy, arcR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
-              ctx.strokeStyle = pc;
-              ctx.lineWidth = 2 * zoom;
-              ctx.stroke();
-            }
-            // Task count text
-            if (zoom > 0.5) {
-              ctx.font = `bold ${Math.max(7, 8 * zoom)}px 'IBM Plex Mono', monospace`;
-              ctx.fillStyle = pc;
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(`${n.taskDone}/${n.taskTotal}`, sx, sy);
-              ctx.textBaseline = 'alphabetic';
-            }
+          if (n.taskTotal > 0 && zoom > 0.5) {
+            ctx.font = `bold ${Math.max(8, 9 * zoom)}px 'IBM Plex Mono', monospace`;
+            ctx.fillStyle = pc;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${n.taskTotal}`, sx, sy);
+            ctx.textBaseline = 'alphabetic';
           }
 
-          // Label below
-          if (zoom > 0.6) {
-            const label = n.title.length > 18 ? n.title.slice(0, 18) + '…' : n.title;
-            ctx.font = `bold ${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
-            ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : pc;
-            ctx.textAlign = 'center';
-            ctx.fillText(label, sx, sy + s / 2 + 14);
-          }
+          labels.push({ text: n.title.length > 18 ? n.title.slice(0, 18) + '…' : n.title, x: sx, y: sy + s / 2 + 14, bold: true, color: isHovered ? '#e8e8e8' : isDim ? '#444' : pc, size: isHovered ? 11 : 10, priority: n.linkCount + 100, opacity: n.opacity * (isDim ? 0.25 : 1) });
         } else {
-          // Draw note as circle (existing)
           if (isActive || isHovered) {
             ctx.shadowBlur = isActive ? 12 : 8;
             ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
@@ -1396,31 +1476,49 @@ export default function App() {
           ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
           ctx.lineWidth = 1;
           ctx.stroke();
+          ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
-          ctx.shadowBlur = 0;
-          ctx.shadowColor = 'transparent';
-
-          if (zoom > 0.6) {
-            const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
-            ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
-            ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
-            ctx.textAlign = 'center';
-            ctx.fillText(label, sx, sy + r + 12);
-          }
+          const prio = (isHovered || isActive ? 1000 : 0) + n.linkCount;
+          labels.push({ text: n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title, x: sx, y: sy + r + 12, bold: false, color: isHovered ? '#e8e8e8' : isDim ? '#444' : '#888', size: isHovered ? 11 : 10, priority: prio, opacity: n.opacity * (isDim ? 0.25 : 1) });
         }
 
         ctx.globalAlpha = 1;
       });
 
-      const noteCount = gNodes.filter(n => !n.isProject).length;
-      const projCount = gNodes.filter(n => n.isProject).length;
+      // ── Label culling: draw labels avoiding overlaps, high-priority first ──
+      // Semantic zoom: at low zoom only show labels for hubs
+      const labelThreshold = zoom < 0.5 ? 3 : zoom < 0.8 ? 1 : 0;
+      labels.sort((a, b) => b.priority - a.priority);
+      const placed = [];
+      labels.forEach(lb => {
+        if (lb.priority < labelThreshold && lb.priority < 100) return; // skip low-priority at low zoom (project labels always show: priority >= 100)
+        const estW = lb.text.length * lb.size * 0.55;
+        const estH = lb.size + 2;
+        const lx = lb.x - estW / 2, ly = lb.y - estH / 2;
+        // Check overlap with placed labels
+        let overlaps = false;
+        for (let i = 0; i < placed.length; i++) {
+          const p = placed[i];
+          if (lx < p.x + p.w && lx + estW > p.x && ly < p.y + p.h && ly + estH > p.y) { overlaps = true; break; }
+        }
+        if (overlaps) return;
+        placed.push({ x: lx, y: ly, w: estW, h: estH });
+        ctx.globalAlpha = lb.opacity;
+        ctx.font = `${lb.bold ? 'bold ' : ''}${lb.size}px 'IBM Plex Mono', monospace`;
+        ctx.fillStyle = lb.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(lb.text, lb.x, lb.y);
+      });
+      ctx.globalAlpha = 1;
+
+      // ── Footer stats ──
       ctx.font = "10px 'IBM Plex Mono', monospace";
       ctx.fillStyle = '#444';
       ctx.textAlign = 'left';
       ctx.fillText(`${noteCount} notes · ${projCount} projects · ${gEdges.length} connections`, 10, h - 10);
     };
 
-    animId = requestAnimationFrame(draw);
+    animId = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(animId);
@@ -2049,7 +2147,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.8</span>
+          <span className="tp-ver">v1.10.0</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
