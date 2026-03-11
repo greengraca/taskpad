@@ -1061,11 +1061,10 @@ export default function App() {
       nodeProjectMap.get(noteId).add(projId);
     });
 
-    // Tight initial placement: all nodes start near center, expand smoothly via forces
     const simNodes = gNodes.map((n) => ({
       ...n,
-      x: W() / 2 + (Math.random() - 0.5) * W() * 0.08,
-      y: H() / 2 + (Math.random() - 0.5) * H() * 0.08,
+      x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
+      y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
       vx: 0, vy: 0,
       radius: n.isProject ? 8 + Math.sqrt(n.linkCount) * 3 : 5 + Math.sqrt(n.linkCount) * 2.5,
       opacity: 0,
@@ -1088,10 +1087,9 @@ export default function App() {
     const centerK = 0.008;
     const collisionPad = 12;
     const clusterK = 0.008;
-    const crossingK = 4;
-    const nodeEdgeK = 40;
-    const nodeEdgeDist = 60;
-    const maxVelocity = 8;
+    const crossingK = 3;
+    const nodeEdgeK = 30;
+    const nodeEdgeDist = 50;
 
     // Geometry helpers for edge crossing detection
     const segIntersect = (ax, ay, bx, by, cx, cy, dx, dy) => {
@@ -1291,146 +1289,151 @@ export default function App() {
     const noteCount = gNodes.filter(n => !n.isProject).length;
     const projCount = gNodes.filter(n => n.isProject).length;
 
-    let animId;
-    const tick = () => {
-      animId = requestAnimationFrame(tick);
+    // Physics step extracted for pre-simulation + animation loop reuse
+    const physicsStep = () => {
       const w = W(), h = H();
-      const cx = w / 2, cy = h / 2;
+      const pcx = w / 2, pcy = h / 2;
 
-      // ── Physics step ──
-      if (!settled) {
-        // Centering gravity
-        for (let i = 0; i < simNodes.length; i++) {
-          const a = simNodes[i];
-          if (a === dragNode) continue;
-          a.vx += (cx - a.x) * centerK * alpha;
-          a.vy += (cy - a.y) * centerK * alpha;
-        }
+      // Centering gravity
+      for (let i = 0; i < simNodes.length; i++) {
+        const a = simNodes[i];
+        if (a === dragNode) continue;
+        a.vx += (pcx - a.x) * centerK * alpha;
+        a.vy += (pcy - a.y) * centerK * alpha;
+      }
 
-        // Repulsion (all pairs)
-        for (let i = 0; i < simNodes.length; i++) {
-          const a = simNodes[i];
-          for (let j = i + 1; j < simNodes.length; j++) {
-            const b = simNodes[j];
-            let dx = a.x - b.x, dy = a.y - b.y;
-            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            // Collision: enforce minimum distance
-            const minDist = a.radius + b.radius + collisionPad;
-            if (dist < minDist) dist = minDist;
-            const force = repK * alpha / (dist * dist);
-            const fx = dx / dist * force, fy = dy / dist * force;
-            if (a !== dragNode) { a.vx += fx; a.vy += fy; }
-            if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
-          }
-        }
-
-        // Spring attraction (edges)
-        gEdges.forEach(e => {
-          const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
-          if (!a || !b) return;
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (dist - springLen) * springK * alpha;
+      // Repulsion (all pairs)
+      for (let i = 0; i < simNodes.length; i++) {
+        const a = simNodes[i];
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const b = simNodes[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minDist = a.radius + b.radius + collisionPad;
+          if (dist < minDist) dist = minDist;
+          const force = repK * alpha / (dist * dist);
           const fx = dx / dist * force, fy = dy / dist * force;
           if (a !== dragNode) { a.vx += fx; a.vy += fy; }
           if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
-        });
+        }
+      }
 
-        // Cluster grouping: notes sharing a project attract weakly
-        const noteNodes = simNodes.filter(n => !n.isProject && nodeProjectMap.has(n.id));
-        for (let i = 0; i < noteNodes.length; i++) {
-          for (let j = i + 1; j < noteNodes.length; j++) {
-            const a = noteNodes[i], b = noteNodes[j];
-            const aProj = nodeProjectMap.get(a.id), bProj = nodeProjectMap.get(b.id);
-            let shared = false;
-            for (const p of aProj) { if (bProj.has(p)) { shared = true; break; } }
-            if (!shared) continue;
-            const dx = b.x - a.x, dy = b.y - a.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const force = dist * clusterK * alpha;
+      // Spring attraction (edges)
+      gEdges.forEach(e => {
+        const a = nodeMap.get(e.source), b = nodeMap.get(e.target);
+        if (!a || !b) return;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - springLen) * springK * alpha;
+        const fx = dx / dist * force, fy = dy / dist * force;
+        if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+        if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+      });
+
+      // Cluster grouping: notes sharing a project attract weakly
+      const noteNodes = simNodes.filter(n => !n.isProject && nodeProjectMap.has(n.id));
+      for (let i = 0; i < noteNodes.length; i++) {
+        for (let j = i + 1; j < noteNodes.length; j++) {
+          const a = noteNodes[i], b = noteNodes[j];
+          const aProj = nodeProjectMap.get(a.id), bProj = nodeProjectMap.get(b.id);
+          let shared = false;
+          for (const p of aProj) { if (bProj.has(p)) { shared = true; break; } }
+          if (!shared) continue;
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = dist * clusterK * alpha;
+          const fx = dx / dist * force, fy = dy / dist * force;
+          if (a !== dragNode) { a.vx += fx; a.vy += fy; }
+          if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+        }
+      }
+
+      // Edge crossing repulsion
+      if (alpha > 0.01) {
+        for (let k = 0; k < edgePairs.length; k++) {
+          const [i, j] = edgePairs[k];
+          const e1 = gEdges[i], e2 = gEdges[j];
+          const a = nodeMap.get(e1.source), b = nodeMap.get(e1.target);
+          const c = nodeMap.get(e2.source), d = nodeMap.get(e2.target);
+          if (!a || !b || !c || !d) continue;
+          const hit = segIntersect(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y);
+          if (!hit) continue;
+          const m1x = (a.x + b.x) / 2, m1y = (a.y + b.y) / 2;
+          const m2x = (c.x + d.x) / 2, m2y = (c.y + d.y) / 2;
+          let dx = m1x - m2x, dy = m1y - m2y;
+          const dist = Math.sqrt(dx * dx + dy * dy) + 0.01;
+          const force = crossingK * alpha / dist;
+          const fx = dx / dist * force, fy = dy / dist * force;
+          if (a !== dragNode) { a.vx += fx * (1 - hit.t); a.vy += fy * (1 - hit.t); }
+          if (b !== dragNode) { b.vx += fx * hit.t; b.vy += fy * hit.t; }
+          if (c !== dragNode) { c.vx -= fx * (1 - hit.s); c.vy -= fy * (1 - hit.s); }
+          if (d !== dragNode) { d.vx -= fx * hit.s; d.vy -= fy * hit.s; }
+        }
+      }
+
+      // Node-edge repulsion
+      if (alpha > 0.01) {
+        for (let i = 0; i < simNodes.length; i++) {
+          const n = simNodes[i];
+          if (n === dragNode) continue;
+          for (let j = 0; j < gEdges.length; j++) {
+            const e = gEdges[j];
+            if (e.source === n.id || e.target === n.id) continue;
+            const ea = nodeMap.get(e.source), eb = nodeMap.get(e.target);
+            if (!ea || !eb) continue;
+            const abx = eb.x - ea.x, aby = eb.y - ea.y;
+            const len2 = abx * abx + aby * aby;
+            if (len2 < 1e-10) continue;
+            const t = Math.max(0, Math.min(1, ((n.x - ea.x) * abx + (n.y - ea.y) * aby) / len2));
+            const cpx = ea.x + t * abx, cpy = ea.y + t * aby;
+            const dx = n.x - cpx, dy = n.y - cpy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > nodeEdgeDist || dist < 0.01) continue;
+            const force = nodeEdgeK * alpha / (dist * dist);
             const fx = dx / dist * force, fy = dy / dist * force;
-            if (a !== dragNode) { a.vx += fx; a.vy += fy; }
-            if (b !== dragNode) { b.vx -= fx; b.vy -= fy; }
+            n.vx += fx; n.vy += fy;
+            if (ea !== dragNode) { ea.vx -= fx * 0.2; ea.vy -= fy * 0.2; }
+            if (eb !== dragNode) { eb.vx -= fx * 0.2; eb.vy -= fy * 0.2; }
           }
         }
+      }
 
-        // Edge crossing repulsion: push crossing edges apart
-        if (alpha > 0.01) {
-          for (let k = 0; k < edgePairs.length; k++) {
-            const [i, j] = edgePairs[k];
-            const e1 = gEdges[i], e2 = gEdges[j];
-            const a = nodeMap.get(e1.source), b = nodeMap.get(e1.target);
-            const c = nodeMap.get(e2.source), d = nodeMap.get(e2.target);
-            if (!a || !b || !c || !d) continue;
-            const hit = segIntersect(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y);
-            if (!hit) continue;
-            // Push midpoints apart
-            const m1x = (a.x + b.x) / 2, m1y = (a.y + b.y) / 2;
-            const m2x = (c.x + d.x) / 2, m2y = (c.y + d.y) / 2;
-            let dx = m1x - m2x, dy = m1y - m2y;
-            const dist = Math.sqrt(dx * dx + dy * dy) + 0.01;
-            const force = crossingK * alpha / dist;
-            const fx = dx / dist * force, fy = dy / dist * force;
-            if (a !== dragNode) { a.vx += fx * (1 - hit.t); a.vy += fy * (1 - hit.t); }
-            if (b !== dragNode) { b.vx += fx * hit.t; b.vy += fy * hit.t; }
-            if (c !== dragNode) { c.vx -= fx * (1 - hit.s); c.vy -= fy * (1 - hit.s); }
-            if (d !== dragNode) { d.vx -= fx * hit.s; d.vy -= fy * hit.s; }
-          }
-        }
+      // Velocity damping & integration
+      let totalV = 0;
+      simNodes.forEach(n => {
+        if (n === dragNode) return;
+        n.vx *= 0.85; n.vy *= 0.85;
+        n.x += n.vx; n.y += n.vy;
+        totalV += Math.abs(n.vx) + Math.abs(n.vy);
+      });
 
-        // Node-edge repulsion: keep nodes away from non-adjacent edges
-        if (alpha > 0.01) {
-          for (let i = 0; i < simNodes.length; i++) {
-            const n = simNodes[i];
-            if (n === dragNode) continue;
-            for (let j = 0; j < gEdges.length; j++) {
-              const e = gEdges[j];
-              if (e.source === n.id || e.target === n.id) continue;
-              const ea = nodeMap.get(e.source), eb = nodeMap.get(e.target);
-              if (!ea || !eb) continue;
-              const abx = eb.x - ea.x, aby = eb.y - ea.y;
-              const len2 = abx * abx + aby * aby;
-              if (len2 < 1e-10) continue;
-              const t = Math.max(0, Math.min(1, ((n.x - ea.x) * abx + (n.y - ea.y) * aby) / len2));
-              const cx = ea.x + t * abx, cy = ea.y + t * aby;
-              const dx = n.x - cx, dy = n.y - cy;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist > nodeEdgeDist || dist < 0.01) continue;
-              const force = nodeEdgeK * alpha / (dist * dist);
-              const fx = dx / dist * force, fy = dy / dist * force;
-              n.vx += fx; n.vy += fy;
-              if (ea !== dragNode) { ea.vx -= fx * 0.2; ea.vy -= fy * 0.2; }
-              if (eb !== dragNode) { eb.vx -= fx * 0.2; eb.vy -= fy * 0.2; }
-            }
-          }
-        }
+      // Alpha decay
+      alpha *= (1 - alphaDecay);
+      return totalV;
+    };
 
-        // Velocity damping, clamping & integration
-        let totalV = 0;
-        simNodes.forEach(n => {
-          if (n === dragNode) return;
-          n.vx *= 0.85; n.vy *= 0.85;
-          // Clamp velocity to prevent explosive jitter
-          const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
-          if (speed > maxVelocity) { const s = maxVelocity / speed; n.vx *= s; n.vy *= s; }
-          n.x += n.vx; n.y += n.vy;
-          totalV += Math.abs(n.vx) + Math.abs(n.vy);
-        });
+    // Pre-simulate: run physics silently so graph appears already settled
+    const preSimTicks = 200;
+    for (let t = 0; t < preSimTicks; t++) {
+      const totalV = physicsStep();
+      if (alpha < alphaMin && totalV < 0.5) { settled = true; break; }
+    }
+    // After pre-sim, set all nodes visible immediately and let remaining sim be gentle
+    simNodes.forEach(n => { n.opacity = 1; });
 
-        // Alpha decay
-        alpha *= (1 - alphaDecay);
+    let animId;
+    const tick = () => {
+      animId = requestAnimationFrame(tick);
+
+      // ── Physics step ──
+      if (!settled) {
+        const totalV = physicsStep();
         if (alpha < alphaMin && totalV < 0.5) settled = true;
         needsRedraw = true;
       }
 
-      // Fade-in opacity (always runs)
-      let anyFading = false;
-      simNodes.forEach(n => {
-        if (n.opacity < 1) { n.opacity = Math.min(1, n.opacity + 0.04); anyFading = true; needsRedraw = true; }
-      });
-
       if (!needsRedraw) return;
-      needsRedraw = !settled || anyFading;
+      needsRedraw = !settled;
 
       // ── Render ──
       ctx.clearRect(0, 0, w, h);
@@ -2227,7 +2230,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.3</span>
+          <span className="tp-ver">v1.10.4</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
