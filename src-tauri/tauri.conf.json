@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "TaskPad",
-    "version": "1.10.8"
+    "version": "1.10.9"
   },
   "tauri": {
     "allowlist": {

@@ -2325,7 +2325,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.8</span>
+          <span className="tp-ver">v1.10.9</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>

@@ -103,7 +103,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .tp-t-edit { color: #e8e8e8; background: #141414; outline: none; border-radius: 0; }
 .tp-t-add { background: none; border: 1px dashed #2a2a2a; color: #555; font-size: 16px; cursor: pointer; padding: 3px 10px; border-radius: 6px; margin-left: 8px; font-family: var(--fm); line-height: 1; }
 .tp-t-add:hover { border-color: #444; color: #888; }
-.team-badge { font-size: 10px; filter: grayscale(1) brightness(2); }
+.team-badge { font-size: 10px; filter: grayscale(1) brightness(2); margin-left: -4px; display: inline-flex; align-items: center; line-height: 1; }
 
 /* ─── Context menu ─── */
 .tp-ctx { position: fixed; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 6px; z-index: 1000; min-width: 240px; box-shadow: 0 8px 30px rgba(0,0,0,.5); max-height: 80vh; overflow-y: auto; }
