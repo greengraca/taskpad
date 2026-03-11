@@ -1487,7 +1487,25 @@ export default function App() {
       if (alpha < alphaMin && totalV < 0.5) { settled = true; break; }
     }
 
+    // Fit layout to viewport: scale & center all nodes to fill the canvas with padding
+    if (simNodes.length > 1) {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      simNodes.forEach(n => { minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x); minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y); });
+      const bw = maxX - minX || 1, bh = maxY - minY || 1;
+      const pad = 0.15; // 15% padding on each side
+      const availW = W() * (1 - 2 * pad), availH = H() * (1 - 2 * pad);
+      const scale = Math.min(availW / bw, availH / bh, 1.5); // cap scale so small graphs don't over-zoom
+      const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+      const targetX = W() / 2, targetY = H() / 2;
+      simNodes.forEach(n => {
+        n.x = targetX + (n.x - midX) * scale;
+        n.y = targetY + (n.y - midY) * scale;
+        n.vx = 0; n.vy = 0;
+      });
+    }
+
     // After pre-sim, set all nodes visible immediately and let remaining sim be gentle
+    alpha = 0.05; settled = false; // gentle final settle after rescaling
     simNodes.forEach(n => { n.opacity = 1; });
 
     let animId;
@@ -2300,7 +2318,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.6</span>
+          <span className="tp-ver">v1.10.7</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
