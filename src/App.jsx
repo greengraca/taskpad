@@ -83,7 +83,7 @@ const DEFAULT_DATA = {
   shortcuts: DEFAULT_SHORTCUTS,
   scOrder: DEFAULT_SHORTCUTS.map(s => s.id),
   showSc: true,
-  activeTab: INBOX_ID,
+  activeTab: NOTES_ID,
   settings: { colorCodeTasks: true, colorCodeYellow: 4, colorCodeRed: 8, colorCodePerProject: {} },
 };
 
@@ -679,8 +679,8 @@ export default function App() {
       let scOrder = Array.isArray(base.scOrder) && base.scOrder.length ? base.scOrder : merged.map(s => s.id);
       scOrder = scOrder.filter(id => byId.has(id));
       const seen = new Set(scOrder); for (const s of merged) if (!seen.has(s.id)) scOrder.push(s.id);
-      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: INBOX_ID, settings: { colorCodeTasks: true, colorCodeYellow: 4, colorCodeRed: 8, colorCodePerProject: {}, ...(base.settings || {}) } };
-      if (next.activeTab !== INBOX_ID && next.activeTab !== NOTES_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = INBOX_ID;
+      const next = { ...base, shortcuts: merged, scOrder, showSc: typeof base.showSc === 'boolean' ? base.showSc : true, activeTab: NOTES_ID, settings: { colorCodeTasks: true, colorCodeYellow: 4, colorCodeRed: 8, colorCodePerProject: {}, ...(base.settings || {}) } };
+      if (next.activeTab !== INBOX_ID && next.activeTab !== NOTES_ID && !next.projects.some(p => p.id === next.activeTab)) next.activeTab = NOTES_ID;
       return next;
     };
     initSync(
@@ -2461,7 +2461,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.11.0</span>
+          <span className="tp-ver">v1.11.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
