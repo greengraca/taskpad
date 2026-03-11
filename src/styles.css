@@ -457,7 +457,7 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 .notes-proj-link { margin-left: auto; position: relative; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .notes-proj-link-btn { background: none; border: 1px dashed #2a2a2a; color: #555; font-family: var(--fm); font-size: 10px; padding: 3px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
 .notes-proj-link-btn:hover { border-color: #444; color: #888; }
-.notes-proj-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 2px 6px 2px 8px; border-radius: 4px; white-space: nowrap; }
+.notes-proj-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-family: var(--fm); font-weight: 500; border: 1px solid; padding: 3px 6px; border-radius: 4px; white-space: nowrap; line-height: 1; }
 .notes-proj-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .notes-proj-unlink { background: none; border: none; color: inherit; cursor: pointer; font-size: 13px; padding: 0 0 0 3px; line-height: 1; opacity: 0.5; }
 .notes-proj-unlink:hover { opacity: 1; }
@@ -541,9 +541,10 @@ body { background: var(--bg); color: var(--t); font-family: var(--fu); -webkit-f
 }
 
 /* ─── Shared Notes ────────────────────────────────────────────────────────── */
-.notes-share-toggle { background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 11px; opacity: 0.7; transition: opacity 0.15s; }
+.notes-share-toggle { background: none; border: none; cursor: pointer; padding: 0; opacity: 0.7; transition: opacity 0.15s; color: inherit; display: inline-flex; align-items: center; }
 .notes-share-toggle:hover { opacity: 1; }
-.notes-proj-team-icon { font-size: 10px; margin-right: 2px; }
+.notes-share-icon { width: 10px; height: 10px; flex-shrink: 0; }
+.notes-proj-team-icon { font-size: 9px; line-height: 1; }
 .shared-note-banner { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; color: #888; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.06); }
 .shared-note-avatar { width: 18px; height: 18px; border-radius: 50%; }
 .shared-notes-section { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; }

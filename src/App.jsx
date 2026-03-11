@@ -3046,7 +3046,14 @@ export default function App() {
                                   onClick={(e) => { e.stopPropagation(); cycleNoteShareState(activeNote, lp.id); }}
                                   title={shareState === 'private' ? 'Private — click to share (view)' : shareState === 'view' ? 'Shared (view) — click for edit' : 'Shared (edit) — click to unshare'}
                                 >
-                                  {shareState === 'private' ? '🔒' : shareState === 'view' ? '👁' : '✏️'}
+                                  <svg className="notes-share-icon" viewBox="0 0 16 16" fill="currentColor">
+                                    {shareState === 'private'
+                                      ? <path d="M4 7V5a4 4 0 118 0v2h1a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1h1zm2 0h4V5a2 2 0 10-4 0v2z"/>
+                                      : shareState === 'view'
+                                      ? <path d="M8 3C4.5 3 1.7 5.1.5 8c1.2 2.9 4 5 7.5 5s6.3-2.1 7.5-5c-1.2-2.9-4-5-7.5-5zm0 8a3 3 0 110-6 3 3 0 010 6zm0-2a1 1 0 100-2 1 1 0 000 2z"/>
+                                      : <path d="M12.9 1.7L1.7 12.9l1.4 1.4L14.3 3.1l-1.4-1.4zM2 12.1V14h1.9l8-8L10 4.1l-8 8zM14 4l-2-2 1.3-1.3a1 1 0 011.4 0l.6.6a1 1 0 010 1.4L14 4z"/>
+                                    }
+                                  </svg>
                                 </button>
                               );
                             })()}
