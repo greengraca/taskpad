@@ -1061,46 +1061,11 @@ export default function App() {
       nodeProjectMap.get(noteId).add(projId);
     });
 
-    // Cluster-aware initial placement: spread groups apart, then let springs converge
-    const componentOf = new Map();
-    const adj = new Map();
-    gNodes.forEach(n => { adj.set(n.id, new Set()); componentOf.set(n.id, n.id); });
-    gEdges.forEach(e => { adj.get(e.source)?.add(e.target); adj.get(e.target)?.add(e.source); });
-    // Union-find to identify connected components
-    const find = (id) => { while (componentOf.get(id) !== id) { componentOf.set(id, componentOf.get(componentOf.get(id))); id = componentOf.get(id); } return id; };
-    const union = (a, b) => { componentOf.set(find(a), find(b)); };
-    gEdges.forEach(e => union(e.source, e.target));
-    // Group nodes by component
-    const components = new Map();
-    gNodes.forEach(n => {
-      const root = find(n.id);
-      if (!components.has(root)) components.set(root, []);
-      components.get(root).push(n);
-    });
-    // Assign each component a position on a circle around canvas center
-    const compArr = [...components.values()].sort((a, b) => b.length - a.length);
-    const spreadRadius = Math.min(W(), H()) * 0.35;
-    const compPositions = compArr.map((_, i) => {
-      if (compArr.length === 1) return { cx: W() / 2, cy: H() / 2 };
-      const angle = (2 * Math.PI * i) / compArr.length - Math.PI / 2;
-      return { cx: W() / 2 + Math.cos(angle) * spreadRadius, cy: H() / 2 + Math.sin(angle) * spreadRadius };
-    });
-    // Build simNodes with cluster-aware positions
-    const nodeInitPos = new Map();
-    compArr.forEach((nodes, ci) => {
-      const { cx: gcx, cy: gcy } = compPositions[ci];
-      const clusterSpread = Math.min(60, 20 + nodes.length * 4);
-      nodes.forEach(n => {
-        nodeInitPos.set(n.id, {
-          x: gcx + (Math.random() - 0.5) * clusterSpread,
-          y: gcy + (Math.random() - 0.5) * clusterSpread,
-        });
-      });
-    });
+    // Tight initial placement: all nodes start near center, expand smoothly via forces
     const simNodes = gNodes.map((n) => ({
       ...n,
-      x: nodeInitPos.get(n.id).x,
-      y: nodeInitPos.get(n.id).y,
+      x: W() / 2 + (Math.random() - 0.5) * W() * 0.08,
+      y: H() / 2 + (Math.random() - 0.5) * H() * 0.08,
       vx: 0, vy: 0,
       radius: n.isProject ? 8 + Math.sqrt(n.linkCount) * 3 : 5 + Math.sqrt(n.linkCount) * 2.5,
       opacity: 0,
@@ -1123,9 +1088,10 @@ export default function App() {
     const centerK = 0.008;
     const collisionPad = 12;
     const clusterK = 0.008;
-    const crossingK = 1.5;
-    const nodeEdgeK = 30;
-    const nodeEdgeDist = 50;
+    const crossingK = 4;
+    const nodeEdgeK = 40;
+    const nodeEdgeDist = 60;
+    const maxVelocity = 8;
 
     // Geometry helpers for edge crossing detection
     const segIntersect = (ax, ay, bx, by, cx, cy, dx, dy) => {
@@ -1389,7 +1355,7 @@ export default function App() {
         }
 
         // Edge crossing repulsion: push crossing edges apart
-        if (alpha > 0.05) {
+        if (alpha > 0.01) {
           for (let k = 0; k < edgePairs.length; k++) {
             const [i, j] = edgePairs[k];
             const e1 = gEdges[i], e2 = gEdges[j];
@@ -1413,7 +1379,7 @@ export default function App() {
         }
 
         // Node-edge repulsion: keep nodes away from non-adjacent edges
-        if (alpha > 0.05) {
+        if (alpha > 0.01) {
           for (let i = 0; i < simNodes.length; i++) {
             const n = simNodes[i];
             if (n === dragNode) continue;
@@ -1439,11 +1405,14 @@ export default function App() {
           }
         }
 
-        // Velocity damping & integration
+        // Velocity damping, clamping & integration
         let totalV = 0;
         simNodes.forEach(n => {
           if (n === dragNode) return;
           n.vx *= 0.85; n.vy *= 0.85;
+          // Clamp velocity to prevent explosive jitter
+          const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+          if (speed > maxVelocity) { const s = maxVelocity / speed; n.vx *= s; n.vy *= s; }
           n.x += n.vx; n.y += n.vy;
           totalV += Math.abs(n.vx) + Math.abs(n.vy);
         });
@@ -2258,7 +2227,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.2</span>
+          <span className="tp-ver">v1.10.3</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
