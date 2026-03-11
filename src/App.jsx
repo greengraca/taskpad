@@ -1061,10 +1061,46 @@ export default function App() {
       nodeProjectMap.get(noteId).add(projId);
     });
 
+    // Cluster-aware initial placement: spread groups apart, then let springs converge
+    const componentOf = new Map();
+    const adj = new Map();
+    gNodes.forEach(n => { adj.set(n.id, new Set()); componentOf.set(n.id, n.id); });
+    gEdges.forEach(e => { adj.get(e.source)?.add(e.target); adj.get(e.target)?.add(e.source); });
+    // Union-find to identify connected components
+    const find = (id) => { while (componentOf.get(id) !== id) { componentOf.set(id, componentOf.get(componentOf.get(id))); id = componentOf.get(id); } return id; };
+    const union = (a, b) => { componentOf.set(find(a), find(b)); };
+    gEdges.forEach(e => union(e.source, e.target));
+    // Group nodes by component
+    const components = new Map();
+    gNodes.forEach(n => {
+      const root = find(n.id);
+      if (!components.has(root)) components.set(root, []);
+      components.get(root).push(n);
+    });
+    // Assign each component a position on a circle around canvas center
+    const compArr = [...components.values()].sort((a, b) => b.length - a.length);
+    const spreadRadius = Math.min(W(), H()) * 0.35;
+    const compPositions = compArr.map((_, i) => {
+      if (compArr.length === 1) return { cx: W() / 2, cy: H() / 2 };
+      const angle = (2 * Math.PI * i) / compArr.length - Math.PI / 2;
+      return { cx: W() / 2 + Math.cos(angle) * spreadRadius, cy: H() / 2 + Math.sin(angle) * spreadRadius };
+    });
+    // Build simNodes with cluster-aware positions
+    const nodeInitPos = new Map();
+    compArr.forEach((nodes, ci) => {
+      const { cx: gcx, cy: gcy } = compPositions[ci];
+      const clusterSpread = Math.min(60, 20 + nodes.length * 4);
+      nodes.forEach(n => {
+        nodeInitPos.set(n.id, {
+          x: gcx + (Math.random() - 0.5) * clusterSpread,
+          y: gcy + (Math.random() - 0.5) * clusterSpread,
+        });
+      });
+    });
     const simNodes = gNodes.map((n) => ({
       ...n,
-      x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
-      y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
+      x: nodeInitPos.get(n.id).x,
+      y: nodeInitPos.get(n.id).y,
       vx: 0, vy: 0,
       radius: n.isProject ? 8 + Math.sqrt(n.linkCount) * 3 : 5 + Math.sqrt(n.linkCount) * 2.5,
       opacity: 0,
@@ -1156,12 +1192,13 @@ export default function App() {
       if (e.button === 0) {
         const n = getNodeAt(mouseX, mouseY);
         if (n) { dragNode = n; isDragging = false; wake(); e.preventDefault(); }
+        else { isPanning = true; panStartX = mouseX; panStartY = mouseY; panStartPX = panX; panStartPY = panY; e.preventDefault(); }
       }
     };
     const onMouseMove = (e) => {
       const rect = canvas.getBoundingClientRect();
       mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
-      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); needsRedraw = true; return; }
+      if (isPanning) { panX = panStartPX + (mouseX - panStartX); panY = panStartPY + (mouseY - panStartY); canvas.style.cursor = 'grabbing'; needsRedraw = true; return; }
       if (dragNode) {
         isDragging = true;
         const { x, y } = screenToWorld(mouseX, mouseY);
@@ -2221,7 +2258,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.1</span>
+          <span className="tp-ver">v1.10.2</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
