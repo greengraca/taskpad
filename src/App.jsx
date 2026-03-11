@@ -1925,10 +1925,10 @@ export default function App() {
   // Shared notes helpers
   const getNoteShareState = useCallback((noteId, teamId) => {
     const entries = sharedNotesMap[teamId] || [];
-    const entry = entries.find(e => e.noteId === noteId && e.ownerUid === syncStatus?.user?.uid);
+    const entry = entries.find(e => e.noteId === noteId && e.ownerUid === authUser?.uid);
     if (!entry) return 'private';
     return entry.permission; // 'view' or 'edit'
-  }, [sharedNotesMap, syncStatus?.user?.uid]);
+  }, [sharedNotesMap, authUser?.uid]);
 
   const cycleNoteShareState = useCallback(async (noteId, teamId) => {
     const currentState = getNoteShareState(noteId, teamId);
@@ -1993,7 +1993,7 @@ export default function App() {
         .map(n => ({ ...n, _isOwn: true }));
 
       const sharedEntries = sharedNotesMap[tid] || [];
-      const myUid = syncStatus?.user?.uid;
+      const myUid = authUser?.uid;
       const otherShared = sharedEntries
         .filter(e => e.ownerUid !== myUid)
         .map(e => ({
@@ -2009,7 +2009,7 @@ export default function App() {
     }
 
     return EMPTY;
-  }, [notesList, data, activeTab, sharedNotesMap, syncStatus?.user?.uid]);
+  }, [notesList, data, activeTab, sharedNotesMap, authUser?.uid]);
 
   if (loading || !data) return <div className="loading">Loading TaskPad...</div>;
 
@@ -2948,7 +2948,7 @@ export default function App() {
                 ))}
                 {/* Shared notes from team members */}
                 {(() => {
-                  const myUid = syncStatus?.user?.uid;
+                  const myUid = authUser?.uid;
                   const teamProjects = projects.filter(p => p.isTeam && p.teamId);
                   const sharedSections = teamProjects
                     .map(tp => {
