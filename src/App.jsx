@@ -286,13 +286,13 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       const el = e.target; const start = el.selectionStart ?? text.length; const end = el.selectionEnd ?? text.length;
-      // If current line is an empty bullet, remove it instead of adding another
+      // If current line is an empty bullet, keep it (empty spacer) and add a new bullet below
       const before = text.slice(0, start);
       const emptyBullet = before.match(/\n- $/);
       if (emptyBullet) {
-        const next = text.slice(0, start - 3) + text.slice(end);
+        const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
         setText(next);
-        requestAnimationFrame(() => { try { const pos = start - 3; el.selectionStart = el.selectionEnd = pos; } catch {} });
+        requestAnimationFrame(() => { try { const pos = start + bullet.length; el.selectionStart = el.selectionEnd = pos; } catch {} });
         return true;
       }
       const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
@@ -2325,7 +2325,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.9</span>
+          <span className="tp-ver">v1.10.10</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
