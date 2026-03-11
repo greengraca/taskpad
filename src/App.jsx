@@ -1091,6 +1091,11 @@ export default function App() {
     const nodeEdgeK = 30;
     const nodeEdgeDist = 50;
 
+    // Pre-compute node degrees for gravity weighting
+    const nodeDegree = new Map();
+    gNodes.forEach(n => nodeDegree.set(n.id, 0));
+    gEdges.forEach(e => { nodeDegree.set(e.source, (nodeDegree.get(e.source) || 0) + 1); nodeDegree.set(e.target, (nodeDegree.get(e.target) || 0) + 1); });
+
     // Geometry helpers for edge crossing detection
     const segIntersect = (ax, ay, bx, by, cx, cy, dx, dy) => {
       const denom = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
@@ -1294,12 +1299,14 @@ export default function App() {
       const w = W(), h = H();
       const pcx = w / 2, pcy = h / 2;
 
-      // Centering gravity
+      // Centering gravity (stronger for isolated/low-degree nodes)
       for (let i = 0; i < simNodes.length; i++) {
         const a = simNodes[i];
         if (a === dragNode) continue;
-        a.vx += (pcx - a.x) * centerK * alpha;
-        a.vy += (pcy - a.y) * centerK * alpha;
+        const deg = nodeDegree.get(a.id) || 0;
+        const grav = deg === 0 ? centerK * 8 : deg === 1 ? centerK * 3 : centerK;
+        a.vx += (pcx - a.x) * grav * alpha;
+        a.vy += (pcy - a.y) * grav * alpha;
       }
 
       // Repulsion (all pairs)
@@ -2318,7 +2325,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.7</span>
+          <span className="tp-ver">v1.10.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
