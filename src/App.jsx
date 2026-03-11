@@ -949,9 +949,40 @@ export default function App() {
         }
       });
     });
-    const nodes = notesList.map(n => ({ id: n.id, title: n.title || 'Untitled', linkCount: inCount[n.id] || 0 }));
+    // Project nodes + note-project edges
+    const personalProjects = projects.filter(p => !p.isTeam);
+    const linkedProjectIds = new Set();
+    notesList.forEach(n => {
+      const ids = n.projectIds?.length ? n.projectIds : (n.projectId && n.projectId !== INBOX_ID ? [n.projectId] : []);
+      ids.forEach(pid => {
+        const proj = personalProjects.find(p => p.id === pid);
+        if (proj) {
+          linkedProjectIds.add(pid);
+          const key = [n.id, 'proj_' + pid].sort().join(':');
+          if (!edgeSet.has(key)) { edgeSet.add(key); edges.push({ source: n.id, target: 'proj_' + pid, isProjectEdge: true }); }
+          inCount[n.id] = (inCount[n.id] || 0) + 1;
+          inCount['proj_' + pid] = (inCount['proj_' + pid] || 0) + 1;
+        }
+      });
+    });
+    const taskCounts = {};
+    tasks.forEach(t => {
+      if (!t.projectId || t.projectId === INBOX_ID) return;
+      if (!taskCounts[t.projectId]) taskCounts[t.projectId] = { total: 0, done: 0 };
+      taskCounts[t.projectId].total++;
+      if (t.done) taskCounts[t.projectId].done++;
+    });
+    const projNodes = [...linkedProjectIds].map(pid => {
+      const proj = personalProjects.find(p => p.id === pid);
+      const tc = taskCounts[pid] || { total: 0, done: 0 };
+      return { id: 'proj_' + pid, title: proj.name, linkCount: inCount['proj_' + pid] || 0, isProject: true, color: proj.color, taskTotal: tc.total, taskDone: tc.done };
+    });
+    const nodes = [
+      ...notesList.map(n => ({ id: n.id, title: n.title || 'Untitled', linkCount: inCount[n.id] || 0 })),
+      ...projNodes,
+    ];
     return { nodes, edges };
-  }, [notesList]);
+  }, [notesList, projects, tasks]);
 
   const createNote = useCallback(async (opts = {}) => {
     try {
@@ -1028,7 +1059,7 @@ export default function App() {
       x: W() / 2 + (Math.random() - 0.5) * W() * 0.6,
       y: H() / 2 + (Math.random() - 0.5) * H() * 0.6,
       vx: 0, vy: 0,
-      radius: 5 + Math.sqrt(n.linkCount) * 2.5,
+      radius: n.isProject ? 8 + Math.sqrt(n.linkCount) * 3 : 5 + Math.sqrt(n.linkCount) * 2.5,
       opacity: 0,
     }));
     const nodeMap = new Map(simNodes.map(n => [n.id, n]));
@@ -1094,9 +1125,14 @@ export default function App() {
     const onMouseUp = () => {
       if (isPanning) { isPanning = false; return; }
       if (dragNode && !isDragging) {
-        const nId = dragNode.id;
+        const node = dragNode;
         dragNode = null;
-        handleNoteClick(nId);
+        if (node.isProject) {
+          const realId = node.id.replace('proj_', '');
+          up(p => ({ ...p, activeTab: realId }));
+        } else {
+          handleNoteClick(node.id);
+        }
         setShowGraph(false);
         return;
       }
@@ -1166,9 +1202,14 @@ export default function App() {
       if (e.touches.length > 0) return; // still has fingers down
       if (isPanning) { isPanning = false; return; }
       if (dragNode && !isDragging) {
-        const nId = dragNode.id;
+        const node = dragNode;
         dragNode = null;
-        handleNoteClick(nId);
+        if (node.isProject) {
+          const realId = node.id.replace('proj_', '');
+          up(p => ({ ...p, activeTab: realId }));
+        } else {
+          handleNoteClick(node.id);
+        }
         setShowGraph(false);
         return;
       }
@@ -1244,12 +1285,24 @@ export default function App() {
         if (!a || !b) return;
         const sa = worldToScreen(a.x, a.y), sb = worldToScreen(b.x, b.y);
         const isHighlight = hoveredId && (e.source === hoveredId || e.target === hoveredId);
-        ctx.beginPath();
-        ctx.moveTo(sa.x, sa.y);
-        ctx.lineTo(sb.x, sb.y);
-        ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
-        ctx.lineWidth = isHighlight ? 1.5 : 1;
-        ctx.stroke();
+        if (e.isProjectEdge) {
+          const projNode = a.isProject ? a : b;
+          ctx.beginPath();
+          ctx.setLineDash([4, 4]);
+          ctx.moveTo(sa.x, sa.y);
+          ctx.lineTo(sb.x, sb.y);
+          ctx.strokeStyle = isHighlight ? (projNode.color || '#a78bfa') + '66' : (projNode.color || '#555') + '33';
+          ctx.lineWidth = isHighlight ? 1.5 : 1;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(sa.x, sa.y);
+          ctx.lineTo(sb.x, sb.y);
+          ctx.strokeStyle = isHighlight ? '#a78bfa44' : '#2a2a2a';
+          ctx.lineWidth = isHighlight ? 1.5 : 1;
+          ctx.stroke();
+        }
       });
 
       simNodes.forEach(n => {
@@ -1257,44 +1310,114 @@ export default function App() {
         const r = n.radius * zoom;
         if (sx + r < 0 || sx - r > w || sy + r < 0 || sy - r > h) return;
 
-        const isActive = activeNote === n.id;
+        const isActive = !n.isProject && activeNote === n.id;
         const isHovered = hoveredId === n.id;
         const isNeighbor = hoveredId && neighbors.has(n.id);
         const isDim = hoveredId && !isHovered && !isNeighbor && hoveredId !== n.id;
 
         ctx.globalAlpha = n.opacity * (isDim ? 0.3 : 1);
 
-        if (isActive || isHovered) {
-          ctx.shadowBlur = isActive ? 12 : 8;
-          ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
-        }
+        if (n.isProject) {
+          // Draw project as rounded rectangle
+          const pc = n.color || '#888';
+          const s = r * 1.6; // side length
+          const cr = 3 * zoom; // corner radius
+          const x0 = sx - s / 2, y0 = sy - s / 2;
 
-        ctx.beginPath();
-        ctx.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#444' : isActive ? '#a78bfa33' : isNeighbor ? '#383838' : '#333';
-        ctx.fill();
-        ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+          if (isHovered) { ctx.shadowBlur = 10; ctx.shadowColor = pc + '66'; }
 
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
+          ctx.beginPath();
+          ctx.moveTo(x0 + cr, y0);
+          ctx.lineTo(x0 + s - cr, y0);
+          ctx.quadraticCurveTo(x0 + s, y0, x0 + s, y0 + cr);
+          ctx.lineTo(x0 + s, y0 + s - cr);
+          ctx.quadraticCurveTo(x0 + s, y0 + s, x0 + s - cr, y0 + s);
+          ctx.lineTo(x0 + cr, y0 + s);
+          ctx.quadraticCurveTo(x0, y0 + s, x0, y0 + s - cr);
+          ctx.lineTo(x0, y0 + cr);
+          ctx.quadraticCurveTo(x0, y0, x0 + cr, y0);
+          ctx.closePath();
+          ctx.fillStyle = isHovered ? pc + '44' : pc + '22';
+          ctx.fill();
+          ctx.strokeStyle = isHovered ? pc : pc + '88';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
 
-        if (zoom > 0.6) {
-          const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
-          ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
-          ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
-          ctx.textAlign = 'center';
-          ctx.fillText(label, sx, sy + r + 12);
+          ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+
+          // Task progress arc inside the square
+          if (n.taskTotal > 0) {
+            const pct = n.taskDone / n.taskTotal;
+            const arcR = r * 0.55;
+            // Background arc
+            ctx.beginPath();
+            ctx.arc(sx, sy, arcR, 0, Math.PI * 2);
+            ctx.strokeStyle = pc + '33';
+            ctx.lineWidth = 2 * zoom;
+            ctx.stroke();
+            // Progress arc
+            if (pct > 0) {
+              ctx.beginPath();
+              ctx.arc(sx, sy, arcR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
+              ctx.strokeStyle = pc;
+              ctx.lineWidth = 2 * zoom;
+              ctx.stroke();
+            }
+            // Task count text
+            if (zoom > 0.5) {
+              ctx.font = `bold ${Math.max(7, 8 * zoom)}px 'IBM Plex Mono', monospace`;
+              ctx.fillStyle = pc;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(`${n.taskDone}/${n.taskTotal}`, sx, sy);
+              ctx.textBaseline = 'alphabetic';
+            }
+          }
+
+          // Label below
+          if (zoom > 0.6) {
+            const label = n.title.length > 18 ? n.title.slice(0, 18) + '…' : n.title;
+            ctx.font = `bold ${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
+            ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : pc;
+            ctx.textAlign = 'center';
+            ctx.fillText(label, sx, sy + s / 2 + 14);
+          }
+        } else {
+          // Draw note as circle (existing)
+          if (isActive || isHovered) {
+            ctx.shadowBlur = isActive ? 12 : 8;
+            ctx.shadowColor = isActive ? '#a78bfa66' : '#a78bfa44';
+          }
+
+          ctx.beginPath();
+          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          ctx.fillStyle = isHovered ? '#444' : isActive ? '#a78bfa33' : isNeighbor ? '#383838' : '#333';
+          ctx.fill();
+          ctx.strokeStyle = isHovered || isActive ? '#a78bfa' : isNeighbor ? '#666' : '#555';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.shadowBlur = 0;
+          ctx.shadowColor = 'transparent';
+
+          if (zoom > 0.6) {
+            const label = n.title.length > 20 ? n.title.slice(0, 20) + '…' : n.title;
+            ctx.font = `${isHovered ? 11 : 10}px 'IBM Plex Mono', monospace`;
+            ctx.fillStyle = isHovered ? '#e8e8e8' : isDim ? '#444' : '#888';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, sx, sy + r + 12);
+          }
         }
 
         ctx.globalAlpha = 1;
       });
 
+      const noteCount = gNodes.filter(n => !n.isProject).length;
+      const projCount = gNodes.filter(n => n.isProject).length;
       ctx.font = "10px 'IBM Plex Mono', monospace";
       ctx.fillStyle = '#444';
       ctx.textAlign = 'left';
-      ctx.fillText(`${gNodes.length} notes · ${gEdges.length} connections`, 10, h - 10);
+      ctx.fillText(`${noteCount} notes · ${projCount} projects · ${gEdges.length} connections`, 10, h - 10);
     };
 
     animId = requestAnimationFrame(draw);
@@ -1311,7 +1434,7 @@ export default function App() {
       canvas.removeEventListener('touchmove', onTouchMove);
       canvas.removeEventListener('touchend', onTouchEnd);
     };
-  }, [showGraph, graphData, activeNote, handleNoteClick]);
+  }, [showGraph, graphData, activeNote, handleNoteClick, up]);
 
   const handleWikilinkClick = useCallback((noteName) => {
     const existing = notesList.find(n => (n.title || '').toLowerCase() === noteName.toLowerCase());
@@ -1926,7 +2049,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.9.7</span>
+          <span className="tp-ver">v1.9.8</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -2520,7 +2643,7 @@ export default function App() {
               <div className="graph-modal" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
                 <div className="graph-modal-hdr">
                   <span className="graph-modal-title">Graph View</span>
-                  <span className="graph-modal-stats">{graphData.nodes.length} notes · {graphData.edges.length} connections</span>
+                  <span className="graph-modal-stats">{graphData.nodes.filter(n => !n.isProject).length} notes · {graphData.nodes.filter(n => n.isProject).length} projects · {graphData.edges.length} connections</span>
                   <button className="tp-modal-x" onClick={() => setShowGraph(false)}>×</button>
                 </div>
                 <canvas className="graph-canvas" ref={graphCanvasRef} />
