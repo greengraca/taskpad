@@ -1418,6 +1418,75 @@ export default function App() {
       const totalV = physicsStep();
       if (alpha < alphaMin && totalV < 0.5) { settled = true; break; }
     }
+
+    // Post-layout crossing reduction: count crossings, try moving nodes to fix them
+    const countCrossings = () => {
+      let count = 0;
+      for (let k = 0; k < edgePairs.length; k++) {
+        const [i, j] = edgePairs[k];
+        const e1 = gEdges[i], e2 = gEdges[j];
+        const a = nodeMap.get(e1.source), b = nodeMap.get(e1.target);
+        const c = nodeMap.get(e2.source), d = nodeMap.get(e2.target);
+        if (!a || !b || !c || !d) continue;
+        if (segIntersect(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y)) count++;
+      }
+      return count;
+    };
+    // For a node, compute centroid of its neighbors
+    const neighborCentroid = (node) => {
+      let sx = 0, sy = 0, cnt = 0;
+      gEdges.forEach(e => {
+        let other = null;
+        if (e.source === node.id) other = nodeMap.get(e.target);
+        else if (e.target === node.id) other = nodeMap.get(e.source);
+        if (other) { sx += other.x; sy += other.y; cnt++; }
+      });
+      return cnt > 0 ? { x: sx / cnt, y: sy / cnt } : { x: node.x, y: node.y };
+    };
+    // Iterative: for each node involved in a crossing, try reflecting it across its
+    // neighbors' centroid. Keep the move if it reduces total crossings.
+    for (let pass = 0; pass < 5; pass++) {
+      let improved = false;
+      // Collect nodes involved in crossings
+      const crossingNodes = new Set();
+      for (let k = 0; k < edgePairs.length; k++) {
+        const [i, j] = edgePairs[k];
+        const e1 = gEdges[i], e2 = gEdges[j];
+        const a = nodeMap.get(e1.source), b = nodeMap.get(e1.target);
+        const c = nodeMap.get(e2.source), d = nodeMap.get(e2.target);
+        if (!a || !b || !c || !d) continue;
+        if (segIntersect(a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y)) {
+          crossingNodes.add(a); crossingNodes.add(b);
+          crossingNodes.add(c); crossingNodes.add(d);
+        }
+      }
+      if (crossingNodes.size === 0) break;
+      for (const node of crossingNodes) {
+        const before = countCrossings();
+        if (before === 0) break;
+        const cent = neighborCentroid(node);
+        const oldX = node.x, oldY = node.y;
+        // Reflect node across its neighbors' centroid
+        node.x = 2 * cent.x - oldX;
+        node.y = 2 * cent.y - oldY;
+        const after = countCrossings();
+        if (after < before) {
+          improved = true; // keep new position
+        } else {
+          node.x = oldX; node.y = oldY; // revert
+        }
+      }
+      if (!improved) break;
+    }
+
+    // Brief re-settle after crossing reduction moves
+    alpha = 0.15;
+    settled = false;
+    for (let t = 0; t < 80; t++) {
+      const totalV = physicsStep();
+      if (alpha < alphaMin && totalV < 0.5) { settled = true; break; }
+    }
+
     // After pre-sim, set all nodes visible immediately and let remaining sim be gentle
     simNodes.forEach(n => { n.opacity = 1; });
 
@@ -2231,7 +2300,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.10.5</span>
+          <span className="tp-ver">v1.10.6</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
