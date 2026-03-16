@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/version.json", "destination": "/version.json" },
+    { "source": "/update/:target/:version", "destination": "/update/:target/latest.json" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
