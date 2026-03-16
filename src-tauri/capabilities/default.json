@@ -1,0 +1,12 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for TaskPad",
+  "windows": ["main"],
+  "permissions": [
+    "shell:allow-open",
+    "updater:default",
+    "os:default",
+    "process:allow-restart",
+    "process:allow-exit"
+  ]
+}
