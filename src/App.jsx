@@ -269,7 +269,7 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
   const touchTimerRef = useRef(null);
   useEffect(() => { if (editing && inputRef.current) { const el = inputRef.current; el.focus(); if (!task._new) el.select(); } }, [editing]);
   useEffect(() => { setText(task.text); }, [task.text]);
-  const commit = () => { const t = text.trim(); if (!t && task._new) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
+  const commit = () => { const t = text.trim(); if (!t && (task._new || isTeam)) { onDelete(task.id); return; } if (!t) { setEditing(false); setText(task.text); return; } onChange(task.id, t); setEditing(false); };
   const projLabel = isInbox && task.projectId && task.projectId !== INBOX_ID ? allProjects.find(p => p.id === task.projectId) : null;
 
   // Author info with avatar
@@ -289,13 +289,13 @@ function TaskLine({ task, allProjects, accentColor, isInbox, isTeam, nicknames, 
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       const el = e.target; const start = el.selectionStart ?? text.length; const end = el.selectionEnd ?? text.length;
-      // If current line is an empty bullet, keep it (empty spacer) and add a new bullet below
       const before = text.slice(0, start);
+      // If previous line is an empty bullet ("- " with no content), remove it and add bullet to new line
       const emptyBullet = before.match(/\n- $/);
       if (emptyBullet) {
-        const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
+        const next = text.slice(0, start - 2) + '\n- ' + text.slice(end);
         setText(next);
-        requestAnimationFrame(() => { try { const pos = start + bullet.length; el.selectionStart = el.selectionEnd = pos; } catch {} });
+        requestAnimationFrame(() => { try { const pos = start + 1; el.selectionStart = el.selectionEnd = pos; } catch {} });
         return true;
       }
       const bullet = `\n- `; const next = text.slice(0, start) + bullet + text.slice(end);
@@ -1023,7 +1023,7 @@ export default function App() {
     const taskCounts = {};
     tasks.forEach(t => {
       if (!t.projectId || t.projectId === INBOX_ID) return;
-      taskCounts[t.projectId] = (taskCounts[t.projectId] || 0) + 1;
+      if (!t.done) taskCounts[t.projectId] = (taskCounts[t.projectId] || 0) + 1;
     });
     const projNodes = [...linkedProjectIds].map(pid => {
       const proj = personalProjects.find(p => p.id === pid);
@@ -2461,7 +2461,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.11.2</span>
+          <span className="tp-ver">v1.11.3</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
