@@ -40,3 +40,4 @@ firebase-debug.log
 # ---- Claude Code ----
 .claude/
 CLAUDE.md
+.vercel
