@@ -2,6 +2,6 @@
   "version": "1.12.0",
   "notes": "Multi-platform auto-update system",
   "android": {
-    "url": "https://taskpad-phi.vercel.app/releases/TaskPad_1.12.0.apk"
+    "url": "https://github.com/greengraca/taskpad/releases/download/v1.12.0/TaskPad_1.12.0.apk"
   }
 }

@@ -49,7 +49,7 @@ fi
 
 # Update updater endpoint files
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-BASE_URL="https://taskpad-phi.vercel.app/releases"
+BASE_URL="https://github.com/greengraca/taskpad/releases/download/v${V}"
 for target_dir in public/update/*/; do
   target=$(basename "$target_dir")
   sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" "${target_dir}latest.json"
@@ -68,6 +68,7 @@ for target_dir in public/update/*/; do
 done
 
 # Update android APK URL
-sed -i "s|\"url\": \"[^\"]*\"|\"url\": \"${BASE_URL}/TaskPad_${V}.apk\"|" public/version.json
+APK_URL="https://github.com/greengraca/taskpad/releases/download/v${V}/TaskPad_${V}.apk"
+sed -i "s|\"url\": \"[^\"]*\"|\"url\": \"${APK_URL}\"|" public/version.json
 
 echo "Bumped to v$V"
