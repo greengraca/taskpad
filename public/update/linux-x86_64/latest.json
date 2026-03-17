@@ -1,7 +1,7 @@
 {
-  "version": "1.11.3",
-  "notes": "",
-  "pub_date": "2026-03-17T00:08:59Z",
-  "url": "https://taskpad-phi.vercel.app/releases/TaskPad_1.11.3_amd64.AppImage.tar.gz",
+  "version": "1.12.0",
+  "notes": "Multi-platform auto-update system",
+  "pub_date": "2026-03-17T01:11:09Z",
+  "url": "https://taskpad-phi.vercel.app/releases/TaskPad_1.12.0_amd64.AppImage.tar.gz",
   "signature": ""
 }

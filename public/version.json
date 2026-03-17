@@ -1,7 +1,7 @@
 {
-  "version": "1.11.3",
-  "notes": "Notes feature - markdown editing with wikilinks and backlinks",
+  "version": "1.12.0",
+  "notes": "Multi-platform auto-update system",
   "android": {
-    "url": "https://taskpad-phi.vercel.app/releases/TaskPad_1.11.3.apk"
+    "url": "https://taskpad-phi.vercel.app/releases/TaskPad_1.12.0.apk"
   }
 }
