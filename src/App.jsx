@@ -13,7 +13,7 @@ import { initSync, saveToCloud, saveLocal, cleanup, getAuthUser,
 import { parseMarkdown, extractLinks, extractTags } from './markdown';
 import { generateSalt, toBase64, fromBase64, deriveKey, encryptEntry, decryptEntry, createVerifier, checkVerifier } from './crypto';
 import { isFirebaseConfigured, signInEmail, signUpEmail, signOutUser } from './firebase';
-import { checkForUpdates } from './updater';
+import { checkForUpdates, downloadDesktopUpdate, relaunchDesktop, downloadAndroidUpdate, installAndroidApk, isPWA } from './updater';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'vc', name: 'Vercel', url: 'https://vercel.com/dashboard', icon: '/shortcuts/vercel.png', color: '#fff' },
@@ -489,6 +489,9 @@ export default function App() {
 
   // Update popup
   const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateProgress, setUpdateProgress] = useState(null); // null = not downloading, 0-100 = progress
+  const [updateError, setUpdateError] = useState(null);
+  const [apkPath, setApkPath] = useState(null);
   const [swUpdate, setSwUpdate] = useState(null);
 
   useEffect(() => {
@@ -1794,6 +1797,37 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  const handleUpdate = useCallback(async () => {
+    if (!updateInfo) return;
+    setUpdateError(null);
+    setUpdateProgress(0);
+
+    if (updateInfo.platform === 'desktop') {
+      const ok = await downloadDesktopUpdate((p) => setUpdateProgress(p));
+      if (ok) {
+        // On Windows, downloadAndInstall already exits the app.
+        // On macOS/Linux, we need to relaunch.
+        await relaunchDesktop();
+      } else {
+        setUpdateError('Download failed. Try again.');
+        setUpdateProgress(null);
+      }
+    } else if (updateInfo.platform === 'android') {
+      const path = await downloadAndroidUpdate(updateInfo.downloadUrl, (p) => setUpdateProgress(p));
+      if (path) {
+        setApkPath(path);
+        setUpdateProgress(100);
+      } else {
+        setUpdateError('Download failed. Try again.');
+        setUpdateProgress(null);
+      }
+    }
+  }, [updateInfo]);
+
+  const handleInstallApk = useCallback(async () => {
+    if (apkPath) await installAndroidApk(apkPath);
+  }, [apkPath]);
+
   // ─── Ctrl+Z undo / Ctrl+C copy / Ctrl+A select ───
   useEffect(() => {
     const handler = (e) => {
@@ -2441,10 +2475,24 @@ export default function App() {
     <div className="tp-root">
       {updateInfo && (
         <div className="update-banner">
-          <span>Update v{updateInfo.latestVersion} available{updateInfo.notes ? ` — ${updateInfo.notes}` : ''}</span>
+          <span>
+            {updateProgress === null && !updateError && `Update v${updateInfo.latestVersion} available${updateInfo.notes ? ` — ${updateInfo.notes}` : ''}`}
+            {updateProgress !== null && updateProgress < 100 && `Downloading update... ${updateProgress}%`}
+            {updateProgress === 100 && updateInfo.platform === 'android' && 'Download complete — tap Install'}
+            {updateProgress === 100 && updateInfo.platform === 'desktop' && 'Installing update...'}
+            {updateError && updateError}
+          </span>
           <div className="update-actions">
-            {updateInfo.downloadUrl && <a href={updateInfo.downloadUrl} target="_blank" rel="noopener noreferrer" className="update-dl">Download</a>}
-            <button className="update-x" onClick={() => setUpdateInfo(null)}>×</button>
+            {updateProgress === null && !updateError && (
+              <button className="update-dl" onClick={handleUpdate}>Update</button>
+            )}
+            {updateProgress === 100 && updateInfo.platform === 'android' && (
+              <button className="update-dl" onClick={handleInstallApk}>Install</button>
+            )}
+            {updateError && (
+              <button className="update-dl" onClick={handleUpdate}>Retry</button>
+            )}
+            <button className="update-x" onClick={() => { setUpdateInfo(null); setUpdateProgress(null); setUpdateError(null); }}>×</button>
           </div>
         </div>
       )}
