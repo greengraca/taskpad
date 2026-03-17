@@ -41,11 +41,7 @@ git commit -m "release: v$V
 ${NOTES}"
 git push
 
-# 5. Deploy to Vercel (endpoint JSONs + PWA)
-echo "--- Deploying to Vercel ---"
-npx vercel --prod --yes
-
-# 6. Create GitHub Release with artifacts
+# 5. Create GitHub Release with artifacts
 echo "--- Creating GitHub Release ---"
 NSIS_ZIP="src-tauri/target/release/bundle/nsis/TaskPad_${V}_x64-setup.nsis.zip"
 NSIS_EXE="src-tauri/target/release/bundle/nsis/TaskPad_${V}_x64-setup.exe"
