@@ -1,6 +1,6 @@
 #[cfg(target_os = "android")]
 pub mod commands {
-    use tauri::{AppHandle, command, Emitter};
+    use tauri::{AppHandle, Manager, command, Emitter};
     use std::io::Write;
 
     #[command]

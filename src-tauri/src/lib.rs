@@ -1,6 +1,7 @@
 #[cfg(target_os = "android")]
 mod android_update;
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -16,9 +17,9 @@ pub fn run() {
     }
 
     builder
-        .setup(|app| {
+        .setup(|_app| {
             #[cfg(desktop)]
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            _app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             Ok(())
         })
         .run(tauri::generate_context!())

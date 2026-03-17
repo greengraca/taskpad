@@ -4,9 +4,9 @@
   "windows": ["main"],
   "permissions": [
     "shell:allow-open",
-    "updater:default",
     "os:default",
     "process:allow-restart",
     "process:allow-exit"
-  ]
+  ],
+  "platforms": ["linux", "macOS", "windows", "android", "iOS"]
 }

@@ -40,6 +40,7 @@ if [ -z "$V" ]; then echo "Usage: bump-version.sh <version> [notes]"; exit 1; fi
 
 # Update version in all config files
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" package.json public/version.json src-tauri/tauri.conf.json
+sed -i "s/^version = \"[^\"]*\"/version = \"$V\"/" src-tauri/Cargo.toml
 sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v$V/" src/App.jsx
 
 # Update notes if provided
