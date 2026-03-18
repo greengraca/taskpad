@@ -2509,7 +2509,7 @@ export default function App() {
       <header className="tp-hdr">
         <div className="tp-hdr-l">
           <h1 className="tp-name">TaskPad</h1>
-          <span className="tp-ver">v1.12.0</span>
+          <span className="tp-ver">v1.12.1</span>
           {isFirebaseConfigured() ? (
             synced ? (
               <button className="tp-auth-btn" onClick={() => setAuthOpen(true)} title="Sync account">⟳</button>
@@ -2719,7 +2719,7 @@ export default function App() {
       )}
 
       {/* ─── Nav with draggable tabs ─── */}
-      <nav className="tp-nav"><div className="tp-nav-scroll">
+      <nav className="tp-nav"><div className="tp-nav-scroll" onWheel={e => { if (e.deltaY !== 0) { e.currentTarget.scrollLeft += e.deltaY; e.preventDefault(); } }}
         <button className={`tp-t tp-t-special tp-t-notes ${isNotes ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: NOTES_ID })); setActiveNote(null); }} style={{ borderBottomColor: isNotes ? '#a78bfa' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           Notes
@@ -2728,7 +2728,7 @@ export default function App() {
         <button className={`tp-t tp-t-special tp-t-cockpit ${isInbox ? 'tp-t-on' : ''}`} onClick={() => { up(p => ({ ...p, activeTab: INBOX_ID })); setActiveNote(null); }} style={{ borderBottomColor: isInbox ? '#38bdf8' : 'transparent' }}>
           <svg className="tp-t-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Cockpit
-          {isInbox && inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const s = data.settings; const shouldColor = s?.colorCodeTasks !== false; const y = s?.colorCodeYellow ?? 4; const r = s?.colorCodeRed ?? 8; const cc = shouldColor ? (c >= r ? '#ef4444' : c >= y ? '#f59e0b' : null) : null; return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
+          {inboxVisible.filter(t => !t.done).length > 0 && (() => { const c = inboxVisible.filter(t => !t.done).length; const s = data.settings; const shouldColor = s?.colorCodeTasks !== false; const y = s?.colorCodeYellow ?? 4; const r = s?.colorCodeRed ?? 8; const cc = shouldColor ? (c >= r ? '#ef4444' : c >= y ? '#f59e0b' : null) : null; return <span className="tp-tc" style={cc ? { background: cc + '20', color: cc } : undefined}>{c}</span>; })()}
         </button>
         {projects.map(pr => (
           <div key={pr.id} ref={el => { if (el) tabRefs.current[pr.id] = el; else delete tabRefs.current[pr.id]; }} style={{ ...getTabStyle(pr.id), flexShrink: 0 }}>
