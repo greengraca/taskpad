@@ -1,7 +1,7 @@
 {
-  "version": "1.12.1",
+  "version": "1.12.2",
   "notes": "Multi-platform auto-update system",
   "android": {
-    "url": "https://github.com/greengraca/taskpad/releases/download/v1.12.1/TaskPad_1.12.1.apk"
+    "url": "https://github.com/greengraca/taskpad/releases/download/v1.12.2/TaskPad_1.12.2.apk"
   }
 }

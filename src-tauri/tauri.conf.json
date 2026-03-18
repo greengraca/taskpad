@@ -1,6 +1,6 @@
 {
   "productName": "TaskPad",
-  "version": "1.12.1",
+  "version": "1.12.2",
   "identifier": "com.taskpad.app",
   "build": {
     "beforeDevCommand": "npm run dev",

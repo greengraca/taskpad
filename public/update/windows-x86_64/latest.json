@@ -1,7 +1,7 @@
 {
-  "version": "1.12.1",
-  "notes": "Multi-platform auto-update system",
-  "pub_date": "2026-03-17T18:08:59Z",
-  "url": "https://github.com/greengraca/taskpad/releases/download/v1.12.1/TaskPad_1.12.1_x64-setup.nsis.zip",
+  "version": "1.12.2",
+  "notes": "Mouse wheel scrolling on project tabs",
+  "pub_date": "2026-03-18T15:42:10Z",
+  "url": "https://github.com/greengraca/taskpad/releases/download/v1.12.2/TaskPad_1.12.2_x64-setup.nsis.zip",
   "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTYkhKR2c3NkRTbmt0SGNDNTYrTlpHdW9rd1AyblpXVlV1eEY4MDdsVnhOeWt3ZlYvZFRldE1ocDJVKytMVEhiU1l0QWJQQWlIWlkzZ0dUVkpPVXFXdElDeVovMVdOSUFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzczNzExODY1CWZpbGU6VGFza1BhZF8xLjEyLjBfeDY0LXNldHVwLm5zaXMuemlwCm9STW9CNlFHenlWV0xCZVlXK0YrMEVjQnc4QXJ3ZVJSUUw1TXBiRUc2czdYVzhIMXpDTzNqam9leWg4Um9FYU8vQ0ozbE9mdzZabkJYclNlNU5LN0RRPT0K"
 }
